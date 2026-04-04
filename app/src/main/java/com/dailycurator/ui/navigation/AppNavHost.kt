@@ -15,9 +15,6 @@ import com.dailycurator.ui.screens.habits.HabitsScreen
 import com.dailycurator.ui.screens.settings.SettingsScreen
 import com.dailycurator.ui.screens.tasks.TasksScreen
 import com.dailycurator.ui.screens.today.TodayScreen
-import com.dailycurator.ui.theme.Background
-import com.dailycurator.ui.theme.Primary
-import com.dailycurator.ui.theme.TextTertiary
 
 @Composable
 fun AppNavHost() {
@@ -26,9 +23,9 @@ fun AppNavHost() {
     val currentRoute = backStack?.destination?.route
 
     Scaffold(
-        containerColor = Background,
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            NavigationBar(containerColor = Background, tonalElevation = 0.dp) {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.background, tonalElevation = 0.dp) {
                 bottomNavItems.forEach { screen ->
                     val selected = currentRoute == screen.route
                     NavigationBarItem(
@@ -43,11 +40,11 @@ fun AppNavHost() {
                         icon = { Icon(screen.icon, contentDescription = screen.label) },
                         label = { Text(screen.label, style = MaterialTheme.typography.labelSmall) },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = Primary,
-                            selectedTextColor = Primary,
-                            unselectedIconColor = TextTertiary,
-                            unselectedTextColor = TextTertiary,
-                            indicatorColor = Background
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            indicatorColor = MaterialTheme.colorScheme.background
                         )
                     )
                 }

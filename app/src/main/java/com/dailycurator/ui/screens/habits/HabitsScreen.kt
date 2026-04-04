@@ -84,7 +84,7 @@ fun HabitsScreen(viewModel: HabitsViewModel = hiltViewModel()) {
                         .background(MaterialTheme.colorScheme.primary),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("A", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("A", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -110,14 +110,16 @@ fun HabitsScreen(viewModel: HabitsViewModel = hiltViewModel()) {
                     onClick = { showAddHabit = true },
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer)
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null,
-                        tint = Color.White, modifier = Modifier.size(16.dp))
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
                     Text("New Habit",
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            color = Color.White, fontWeight = FontWeight.SemiBold))
+                            color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.SemiBold))
                 }
             }
             Spacer(Modifier.height(16.dp))

@@ -17,8 +17,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dailycurator.data.model.WeeklyGoal
 import com.dailycurator.ui.theme.AccentGreen
-import com.dailycurator.ui.theme.TextPrimary
-import com.dailycurator.ui.theme.TextTertiary
 
 @Composable
 fun GoalListItem(goal: WeeklyGoal, onToggle: () -> Unit, modifier: Modifier = Modifier) {
@@ -34,7 +32,11 @@ fun GoalListItem(goal: WeeklyGoal, onToggle: () -> Unit, modifier: Modifier = Mo
                 .size(22.dp)
                 .clip(CircleShape)
                 .background(if (goal.isCompleted) AccentGreen else Color.Transparent)
-                .border(1.5.dp, if (goal.isCompleted) AccentGreen else TextTertiary, CircleShape),
+                .border(
+                    1.5.dp,
+                    if (goal.isCompleted) AccentGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                    CircleShape
+                ),
             contentAlignment = Alignment.Center
         ) {
             if (goal.isCompleted) {
@@ -47,7 +49,11 @@ fun GoalListItem(goal: WeeklyGoal, onToggle: () -> Unit, modifier: Modifier = Mo
             Text(
                 goal.title,
                 style = MaterialTheme.typography.bodyLarge.copy(
-                    color = if (goal.isCompleted) TextPrimary else TextTertiary,
+                    color = if (goal.isCompleted) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     fontWeight = if (goal.isCompleted) FontWeight.Medium else FontWeight.Normal
                 )
             )
@@ -59,7 +65,7 @@ fun GoalListItem(goal: WeeklyGoal, onToggle: () -> Unit, modifier: Modifier = Mo
             if (info.isNotBlank()) {
                 Text(
                     info,
-                    style = MaterialTheme.typography.labelSmall.copy(color = TextTertiary)
+                    style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                 )
             }
         }

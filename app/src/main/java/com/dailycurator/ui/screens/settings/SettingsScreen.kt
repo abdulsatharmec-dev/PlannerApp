@@ -87,7 +87,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                         checked = isDark,
                         onCheckedChange = { viewModel.toggleDarkTheme() },
                         colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
+                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
                             checkedTrackColor = MaterialTheme.colorScheme.primary
                         )
                     )
@@ -149,4 +149,3 @@ private fun SettingsRow(icon: ImageVector, label: String, onClick: () -> Unit) {
             tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
-

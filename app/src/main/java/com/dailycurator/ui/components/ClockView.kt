@@ -47,6 +47,11 @@ fun ClockView(
 
     val windowMinutes = windowStart.toSecondOfDay() / 60f to windowEnd.toSecondOfDay() / 60f
     val totalMinutes = windowMinutes.second - windowMinutes.first
+    val trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+    val centerDotColor = MaterialTheme.colorScheme.surface
+    val tickColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val metaLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val metaValueColor = MaterialTheme.colorScheme.onSurface
 
     fun timeToAngle(t: LocalTime): Float {
         val minutes = t.toSecondOfDay() / 60f
@@ -74,7 +79,7 @@ fun ClockView(
 
                 // Background track arc (full 360°)
                 drawArc(
-                    color = ProgressTrack,
+                    color = trackColor,
                     startAngle = -90f,
                     sweepAngle = 360f,
                     useCenter = false,
@@ -118,7 +123,7 @@ fun ClockView(
 
                 // Centre dot
                 drawCircle(color = NowRed, radius = 7.dp.toPx(), center = center)
-                drawCircle(color = Surface, radius = 4.dp.toPx(), center = center)
+                drawCircle(color = centerDotColor, radius = 4.dp.toPx(), center = center)
 
                 // Tick marks every hour
                 val hours = ((windowEnd.hour - windowStart.hour)).coerceAtLeast(1)
@@ -128,7 +133,7 @@ fun ClockView(
                     val outer = outerR - trackStroke / 2 - 2.dp.toPx()
                     val inner = outer - 8.dp.toPx()
                     drawLine(
-                        color = TextTertiary,
+                        color = tickColor,
                         start = Offset(
                             (center.x + outer * cos(tickAngle)).toFloat(),
                             (center.y + outer * sin(tickAngle)).toFloat()
@@ -169,18 +174,18 @@ fun ClockView(
             Column {
                 Text("WINDOW START",
                     style = MaterialTheme.typography.labelSmall.copy(
-                        color = TextTertiary, fontSize = 9.sp))
+                        color = metaLabelColor, fontSize = 9.sp))
                 Text(windowStart.format(DateTimeFormatter.ofPattern("HH:mm")),
                     style = MaterialTheme.typography.bodySmall.copy(
-                        color = TextSecondary, fontWeight = FontWeight.SemiBold))
+                        color = metaValueColor, fontWeight = FontWeight.SemiBold))
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text("WINDOW END",
                     style = MaterialTheme.typography.labelSmall.copy(
-                        color = TextTertiary, fontSize = 9.sp))
+                        color = metaLabelColor, fontSize = 9.sp))
                 Text(windowEnd.format(DateTimeFormatter.ofPattern("HH:mm")),
                     style = MaterialTheme.typography.bodySmall.copy(
-                        color = TextSecondary, fontWeight = FontWeight.SemiBold))
+                        color = metaValueColor, fontWeight = FontWeight.SemiBold))
             }
         }
     }

@@ -23,12 +23,12 @@ fun TimelineEventCard(event: ScheduleEvent, modifier: Modifier = Modifier) {
     val accentColor = when (event.priority) {
         EventPriority.HIGH   -> AccentRed
         EventPriority.MEDIUM -> TimelineBlue
-        EventPriority.LOW    -> TextTertiary
+        EventPriority.LOW    -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Row(modifier = Modifier.height(IntrinsicSize.Min)) {
@@ -41,7 +41,7 @@ fun TimelineEventCard(event: ScheduleEvent, modifier: Modifier = Modifier) {
             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(event.title,
-                        style = MaterialTheme.typography.titleMedium.copy(color = TextPrimary),
+                        style = MaterialTheme.typography.titleMedium.copy(color = MaterialTheme.colorScheme.onSurface),
                         modifier = Modifier.weight(1f))
                     if (event.isProtected) {
                         Spacer(Modifier.width(4.dp))

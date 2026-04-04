@@ -32,7 +32,7 @@ fun PriorityItem(
     val accentColor = when (task.urgency) {
         Urgency.GREEN   -> AccentGreen
         Urgency.RED     -> AccentRed
-        Urgency.NEUTRAL -> TextTertiary
+        Urgency.NEUTRAL -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     val checkColor by animateColorAsState(
         targetValue = if (task.isDone) AccentGreen else Color.Transparent,
@@ -42,7 +42,7 @@ fun PriorityItem(
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Row(modifier = Modifier.height(IntrinsicSize.Min)) {
@@ -61,7 +61,10 @@ fun PriorityItem(
                 Text(
                     text = "%02d".format(task.rank),
                     style = MaterialTheme.typography.labelSmall.copy(
-                        color = TextTertiary, fontWeight = FontWeight.Bold, fontSize = 11.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp
+                    ),
                     modifier = Modifier.width(22.dp)
                 )
                 Spacer(Modifier.width(8.dp))
@@ -69,7 +72,12 @@ fun PriorityItem(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(task.title,
                         style = MaterialTheme.typography.titleMedium.copy(
-                            color = if (task.isDone) TextTertiary else TextPrimary))
+                            color = if (task.isDone) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
+                        ))
                     Spacer(Modifier.height(2.dp))
                     val subtitle = buildString {
                         append("${task.startTime} - ${task.endTime}")
@@ -85,7 +93,11 @@ fun PriorityItem(
                         .size(22.dp)
                         .clip(CircleShape)
                         .background(checkColor)
-                        .border(1.5.dp, if (task.isDone) AccentGreen else TextTertiary, CircleShape)
+                        .border(
+                            1.5.dp,
+                            if (task.isDone) AccentGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                            CircleShape
+                        )
                         .clickable { onToggleDone() },
                     contentAlignment = Alignment.Center
                 ) {

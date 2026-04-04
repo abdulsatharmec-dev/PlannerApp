@@ -45,7 +45,7 @@ fun HabitCard(
         "Physical"  -> Color(0xFFE0F7FA)
         "Mental"    -> Color(0xFFFBE9E7)
         "Spiritual" -> Color(0xFFE8F5E9)
-        else -> Surface
+        else -> MaterialTheme.colorScheme.surface
     }
 
     var animStarted by remember { mutableStateOf(false) }
@@ -59,7 +59,11 @@ fun HabitCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (habit.isDone) Surface.copy(alpha = 0.5f) else Surface
+            containerColor = if (habit.isDone) {
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
         ),
         elevation = CardDefaults.cardElevation(0.dp)
     ) {
@@ -78,7 +82,7 @@ fun HabitCard(
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(habit.name,
-                        style = MaterialTheme.typography.titleLarge.copy(color = Primary),
+                        style = MaterialTheme.typography.titleLarge.copy(color = MaterialTheme.colorScheme.onSurface),
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(3.dp))
                     Text(
@@ -169,7 +173,7 @@ fun HabitCard(
             }
             Text(finalNote,
                 style = MaterialTheme.typography.bodySmall.copy(
-                    color = if (habit.isGoalMet) AccentDeepGreen else TextTertiary))
+                    color = if (habit.isGoalMet) AccentDeepGreen else MaterialTheme.colorScheme.onSurfaceVariant))
         }
     }
 }

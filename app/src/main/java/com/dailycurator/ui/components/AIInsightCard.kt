@@ -19,25 +19,23 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dailycurator.data.model.AiInsight
-import com.dailycurator.ui.theme.InsightBg
-import com.dailycurator.ui.theme.Primary
 
 @Composable
 fun AIInsightCard(insight: AiInsight, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = InsightBg),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.AutoAwesome, contentDescription = null,
-                    tint = Primary, modifier = Modifier.size(14.dp))
+                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(4.dp))
                 Text("ASSISTANT INSIGHT",
                     style = MaterialTheme.typography.labelSmall.copy(
-                        color = Primary, letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold))
+                        color = MaterialTheme.colorScheme.primary, letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold))
                 Spacer(Modifier.weight(1f))
                 Box(
                     modifier = Modifier
@@ -53,7 +51,13 @@ fun AIInsightCard(insight: AiInsight, modifier: Modifier = Modifier) {
             if (insight.boldPart.isNotEmpty()) {
                 Text(
                     text = buildAnnotatedString {
-                        withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = Primary, fontSize = 15.sp)) {
+                        withStyle(
+                            SpanStyle(
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontSize = 15.sp
+                            )
+                        ) {
                             append(insight.boldPart)
                         }
                     }

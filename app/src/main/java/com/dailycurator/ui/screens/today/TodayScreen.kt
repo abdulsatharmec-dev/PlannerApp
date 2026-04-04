@@ -55,7 +55,7 @@ fun TodayScreen(viewModel: TodayViewModel = hiltViewModel()) {
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Default.BookmarkBorder, contentDescription = null,
-                        tint = Color.White, modifier = Modifier.size(20.dp))
+                        tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp))
                 }
                 Spacer(Modifier.width(10.dp))
                 Text("Daily Curator",
@@ -288,7 +288,7 @@ private fun TodayScheduleSection(
                 ) {
                     Text(tab.name.lowercase().replaceFirstChar { it.uppercase() },
                         style = MaterialTheme.typography.bodySmall.copy(
-                            color = if (isActive) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (isActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal))
                 }
             }

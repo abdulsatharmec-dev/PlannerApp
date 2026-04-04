@@ -54,7 +54,7 @@ fun TasksScreen(viewModel: TasksViewModel = hiltViewModel()) {
             FloatingActionButton(
                 onClick = { showAddDialog = true },
                 containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = Color.White
+                contentColor = MaterialTheme.colorScheme.onPrimary
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add Task")
             }
@@ -182,7 +182,11 @@ private fun ManageTaskDialog(
                         val label = when (u) {
                             Urgency.GREEN -> "Normal"; Urgency.RED -> "High"; Urgency.NEUTRAL -> "Low"
                         }
-                        val color = when(u) { Urgency.GREEN -> AccentGreen; Urgency.RED -> AccentRed; else -> Color.Gray }
+                        val color = when (u) {
+                            Urgency.GREEN -> AccentGreen
+                            Urgency.RED -> AccentRed
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        }
                         FilterChip(
                             selected = urgency == u, onClick = { urgency = u }, label = { Text(label) },
                             colors = FilterChipDefaults.filterChipColors(
