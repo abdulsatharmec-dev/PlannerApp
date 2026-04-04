@@ -18,8 +18,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.dailycurator.data.model.HabitCategory
 import com.dailycurator.data.model.HabitType
 import com.dailycurator.ui.components.HabitCard
 import com.dailycurator.ui.theme.*
@@ -35,8 +35,8 @@ fun HabitsScreen(viewModel: HabitsViewModel = hiltViewModel()) {
     if (showAddHabit) {
         AddHabitDialog(
             onDismiss = { showAddHabit = false },
-            onConfirm = { name, category, type, emoji, target, unit ->
-                viewModel.addHabit(name, category, type, emoji, target, unit)
+            onConfirm = { name, category, type, emoji, target, unit, trigger, freq ->
+                viewModel.addHabit(name, category, type, emoji, target, unit, trigger, freq)
                 showAddHabit = false
             }
         )
@@ -229,6 +229,9 @@ private fun MarkHabitDoneDialog(
     var note by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         title = { Text("Mark '${habit.name}' as Done") },
         text = {
             Column {
@@ -256,96 +259,162 @@ private fun MarkHabitDoneDialog(
 @Composable
 private fun AddHabitDialog(
     onDismiss: () -> Unit,
-    onConfirm: (String, HabitCategory, HabitType, String, Float, String) -> Unit
+    onConfirm: (String, String, HabitType, String, Float, String, String?, String) -> Unit
 ) {
     var name      by remember { mutableStateOf("") }
     var emoji     by remember { mutableStateOf("⭐") }
     var target    by remember { mutableStateOf("1") }
     var unit      by remember { mutableStateOf("times") }
-    var category  by remember { mutableStateOf(HabitCategory.MENTAL) }
+    var category  by remember { mutableStateOf("Physical") }
     var habitType by remember { mutableStateOf(HabitType.BUILDING) }
+    var trigger   by remember { mutableStateOf("") }
+    var frequency by remember { mutableStateOf("daily") }
     var nameError by remember { mutableStateOf(false) }
+
+    val unitOptions = listOf("times", "mins", "hours", "ml", "pages", "custom")
+    val defaultCategories = listOf("Physical", "Mental", "Spiritual")
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         title = {
             Text("New Habit",
                 style = MaterialTheme.typography.titleLarge.copy(
                     color = MaterialTheme.colorScheme.onSurface))
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = emoji,
-                        onValueChange = { if (it.length <= 2) emoji = it },
-                        label = { Text("Icon") },
-                        singleLine = true,
-                        modifier = Modifier.width(72.dp)
-                    )
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it; nameError = false },
-                        label = { Text("Habit name") },
-                        isError = nameError,
-                        supportingText = { if (nameError) Text("Required") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.heightIn(max = 450.dp)
+            ) {
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = emoji,
+                            onValueChange = { if (it.length <= 2) emoji = it },
+                            label = { Text("Icon") },
+                            singleLine = true,
+                            modifier = Modifier.width(72.dp)
+                        )
+                        OutlinedTextField(
+                            value = name,
+                            onValueChange = { name = it; nameError = false },
+                            label = { Text("Habit name") },
+                            isError = nameError,
+                            supportingText = { if (nameError) Text("Required") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = target,
-                        onValueChange = { target = it.filter { c -> c.isDigit() || c == '.' } },
-                        label = { Text("Target") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                    OutlinedTextField(
-                        value = unit,
-                        onValueChange = { unit = it },
-                        label = { Text("Unit") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                // Category chips
-                Text("Category", style = MaterialTheme.typography.labelMedium.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    HabitCategory.values().forEach { cat ->
-                        FilterChip(
-                            selected = category == cat,
-                            onClick = { category = cat },
-                            label = { Text(cat.name.lowercase().replaceFirstChar { it.uppercase() }) }
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = target,
+                            onValueChange = { target = it.filter { c -> c.isDigit() || c == '.' } },
+                            label = { Text("Target") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
 
-                // Type chips
-                Text("Type", style = MaterialTheme.typography.labelMedium.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(
-                        selected = habitType == HabitType.BUILDING,
-                        onClick = { habitType = HabitType.BUILDING },
-                        label = { Text("Building") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = AccentGreen.copy(alpha = 0.15f),
-                            selectedLabelColor = AccentGreen
+                item {
+                    Text("Unit", style = MaterialTheme.typography.labelMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(unitOptions) { opt ->
+                            FilterChip(
+                                selected = unit == opt,
+                                onClick = { unit = opt },
+                                label = { Text(opt) }
+                            )
+                        }
+                    }
+                    if (unit == "custom") {
+                        Spacer(Modifier.height(4.dp))
+                        OutlinedTextField(
+                            value = unit,
+                            onValueChange = { unit = it },
+                            label = { Text("Custom Unit") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
                         )
-                    )
-                    FilterChip(
-                        selected = habitType == HabitType.ELIMINATING,
-                        onClick = { habitType = HabitType.ELIMINATING },
-                        label = { Text("Eliminating") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = AccentRed.copy(alpha = 0.15f),
-                            selectedLabelColor = AccentRed
+                    }
+                }
+
+                item {
+                    Text("Category", style = MaterialTheme.typography.labelMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(defaultCategories + listOf("Custom")) { cat ->
+                            FilterChip(
+                                selected = if(cat == "Custom") category !in defaultCategories else category == cat,
+                                onClick = { category = if(cat == "Custom") "" else cat },
+                                label = { Text(cat) }
+                            )
+                        }
+                    }
+                    if (category !in defaultCategories) {
+                        Spacer(Modifier.height(4.dp))
+                        OutlinedTextField(
+                            value = category,
+                            onValueChange = { category = it },
+                            label = { Text("Custom Category Name") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
                         )
+                    }
+                }
+                
+                item {
+                    Text("Type", style = MaterialTheme.typography.labelMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FilterChip(
+                            selected = habitType == HabitType.BUILDING,
+                            onClick = { habitType = HabitType.BUILDING },
+                            label = { Text("Building") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = AccentGreen.copy(alpha = 0.15f),
+                                selectedLabelColor = AccentGreen
+                            )
+                        )
+                        FilterChip(
+                            selected = habitType == HabitType.ELIMINATING,
+                            onClick = { habitType = HabitType.ELIMINATING },
+                            label = { Text("Eliminating") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = AccentRed.copy(alpha = 0.15f),
+                                selectedLabelColor = AccentRed
+                            )
+                        )
+                    }
+                }
+
+                item {
+                    Text("Habit Stacking (Optional)", style = MaterialTheme.typography.labelMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant))
+                    OutlinedTextField(
+                        value = trigger,
+                        onValueChange = { trigger = it },
+                        label = { Text("After I do... (Trigger)") },
+                        modifier = Modifier.fillMaxWidth()
                     )
+                }
+
+                item {
+                    Text("Frequency", style = MaterialTheme.typography.labelMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(listOf("daily", "weekly", "weekdays")) { f ->
+                            FilterChip(
+                                selected = frequency == f,
+                                onClick = { frequency = f },
+                                label = { Text(f.replaceFirstChar { it.uppercase() }) }
+                            )
+                        }
+                    }
                 }
             }
         },
@@ -353,8 +422,16 @@ private fun AddHabitDialog(
             Button(onClick = {
                 if (name.isBlank()) { nameError = true; return@Button }
                 val targetFloat = target.toFloatOrNull() ?: 1f
-                onConfirm(name.trim(), category, habitType, emoji.trim().ifBlank { "⭐" },
-                    targetFloat, unit.trim().ifBlank { "times" })
+                onConfirm(
+                    name.trim(), 
+                    category.trim().ifBlank { "Uncategorized" }, 
+                    habitType, 
+                    emoji.trim().ifBlank { "⭐" },
+                    targetFloat, 
+                    unit.trim().ifBlank { "times" },
+                    trigger.trim().takeIf { it.isNotBlank() },
+                    frequency
+                )
             }) { Text("Add Habit") }
         },
         dismissButton = {

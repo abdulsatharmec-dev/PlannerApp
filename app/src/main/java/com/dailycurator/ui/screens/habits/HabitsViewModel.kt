@@ -3,7 +3,7 @@ package com.dailycurator.ui.screens.habits
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dailycurator.data.model.Habit
-import com.dailycurator.data.model.HabitCategory
+
 import com.dailycurator.data.model.HabitType
 import com.dailycurator.data.repository.HabitRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -47,11 +47,13 @@ class HabitsViewModel @Inject constructor(
 
     fun addHabit(
         name: String,
-        category: HabitCategory,
+        category: String,
         habitType: HabitType,
         iconEmoji: String,
         targetValue: Float,
-        unit: String
+        unit: String,
+        trigger: String? = null,
+        frequency: String = "daily"
     ) = viewModelScope.launch {
         repo.insert(
             Habit(
@@ -62,6 +64,8 @@ class HabitsViewModel @Inject constructor(
                 currentValue = 0f,
                 targetValue = targetValue,
                 unit = unit,
+                trigger = trigger,
+                frequency = frequency,
                 date = LocalDate.now()
             )
         )

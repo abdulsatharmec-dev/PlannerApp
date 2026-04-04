@@ -4,7 +4,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 
 enum class Urgency { GREEN, RED, NEUTRAL }
-enum class HabitCategory { PHYSICAL, MENTAL, SPIRITUAL }
+// HabitCategory has been converted to dynamic Strings. Standard ones: Physical, Mental, Spiritual
 enum class HabitType { BUILDING, ELIMINATING }
 enum class EventPriority { HIGH, MEDIUM, LOW }
 
@@ -47,12 +47,14 @@ data class WeeklyGoal(
 data class Habit(
     val id: Long = 0,
     val name: String,
-    val category: HabitCategory,
+    val category: String,
     val habitType: HabitType = HabitType.BUILDING,
     val iconEmoji: String,
     val currentValue: Float,
     val targetValue: Float,
     val unit: String,
+    val trigger: String? = null,
+    val frequency: String = "daily",
     val streakDays: Int = 0,
     val date: LocalDate = LocalDate.now(),
     val isDone: Boolean = false,

@@ -3,7 +3,7 @@ package com.dailycurator.data.repository
 import com.dailycurator.data.local.dao.HabitDao
 import com.dailycurator.data.local.entity.HabitEntity
 import com.dailycurator.data.model.Habit
-import com.dailycurator.data.model.HabitCategory
+
 import com.dailycurator.data.model.HabitType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -20,21 +20,21 @@ class HabitRepository @Inject constructor(private val dao: HabitDao) {
         dao.getHabitsForDate(date.format(DATE_FMT)).map { list ->
             list.map { e ->
                 Habit(id = e.id, name = e.name,
-                    category = HabitCategory.valueOf(e.category),
+                    category = e.category,
                     habitType = HabitType.valueOf(e.habitType),
                     iconEmoji = e.iconEmoji,
                     currentValue = e.currentValue, targetValue = e.targetValue,
-                    unit = e.unit, streakDays = e.streakDays,
+                    unit = e.unit, trigger = e.trigger, frequency = e.frequency, streakDays = e.streakDays,
                     date = LocalDate.parse(e.date, DATE_FMT),
                     isDone = e.isDone, doneNote = e.doneNote)
             }
         }
 
     suspend fun insert(habit: Habit) = dao.insert(
-        HabitEntity(id = habit.id, name = habit.name, category = habit.category.name,
+        HabitEntity(id = habit.id, name = habit.name, category = habit.category,
             habitType = habit.habitType.name, iconEmoji = habit.iconEmoji,
             currentValue = habit.currentValue, targetValue = habit.targetValue,
-            unit = habit.unit, streakDays = habit.streakDays,
+            unit = habit.unit, trigger = habit.trigger, frequency = habit.frequency, streakDays = habit.streakDays,
             date = habit.date.format(DATE_FMT), isDone = habit.isDone, doneNote = habit.doneNote)
     )
 
@@ -42,18 +42,18 @@ class HabitRepository @Inject constructor(private val dao: HabitDao) {
     suspend fun delete(entity: HabitEntity) = dao.delete(entity)
 
     suspend fun update(habit: Habit) = dao.update(
-        HabitEntity(id = habit.id, name = habit.name, category = habit.category.name,
+        HabitEntity(id = habit.id, name = habit.name, category = habit.category,
             habitType = habit.habitType.name, iconEmoji = habit.iconEmoji,
             currentValue = habit.currentValue, targetValue = habit.targetValue,
-            unit = habit.unit, streakDays = habit.streakDays,
+            unit = habit.unit, trigger = habit.trigger, frequency = habit.frequency, streakDays = habit.streakDays,
             date = habit.date.format(DATE_FMT), isDone = habit.isDone, doneNote = habit.doneNote)
     )
 
     suspend fun delete(habit: Habit) = dao.delete(
-        HabitEntity(id = habit.id, name = habit.name, category = habit.category.name,
+        HabitEntity(id = habit.id, name = habit.name, category = habit.category,
             habitType = habit.habitType.name, iconEmoji = habit.iconEmoji,
             currentValue = habit.currentValue, targetValue = habit.targetValue,
-            unit = habit.unit, streakDays = habit.streakDays,
+            unit = habit.unit, trigger = habit.trigger, frequency = habit.frequency, streakDays = habit.streakDays,
             date = habit.date.format(DATE_FMT), isDone = habit.isDone, doneNote = habit.doneNote)
     )
 

@@ -18,7 +18,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dailycurator.data.model.Habit
-import com.dailycurator.data.model.HabitCategory
+
 import com.dailycurator.data.model.HabitType
 import com.dailycurator.ui.theme.*
 
@@ -30,20 +30,22 @@ fun HabitCard(
 ) {
     val isEliminating = habit.habitType == HabitType.ELIMINATING
     val categoryColor = when (habit.category) {
-        HabitCategory.PHYSICAL  -> AccentTeal
-        HabitCategory.MENTAL    -> AccentBrown
-        HabitCategory.SPIRITUAL -> AccentDeepGreen
+        "Physical"  -> AccentTeal
+        "Mental"    -> AccentBrown
+        "Spiritual" -> AccentDeepGreen
+        else -> Primary
     }
     val progressColor = when {
         isEliminating -> AccentRed
-        habit.category == HabitCategory.MENTAL    -> AccentRed
-        habit.category == HabitCategory.SPIRITUAL -> AccentDeepGreen
+        habit.category == "Mental"    -> AccentRed
+        habit.category == "Spiritual" -> AccentDeepGreen
         else -> Primary
     }
     val iconBgColor = when (habit.category) {
-        HabitCategory.PHYSICAL  -> Color(0xFFE0F7FA)
-        HabitCategory.MENTAL    -> Color(0xFFFBE9E7)
-        HabitCategory.SPIRITUAL -> Color(0xFFE8F5E9)
+        "Physical"  -> Color(0xFFE0F7FA)
+        "Mental"    -> Color(0xFFFBE9E7)
+        "Spiritual" -> Color(0xFFE8F5E9)
+        else -> Surface
     }
 
     var animStarted by remember { mutableStateOf(false) }
@@ -80,7 +82,7 @@ fun HabitCard(
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(3.dp))
                     Text(
-                        habit.category.name,
+                        habit.category,
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = categoryColor, fontWeight = FontWeight.SemiBold,
                             letterSpacing = 0.8.sp)
