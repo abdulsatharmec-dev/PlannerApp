@@ -1,0 +1,103 @@
+package com.dailycurator.data.local
+
+import android.content.Context
+import androidx.room.Database
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.sqlite.db.SupportSQLiteDatabase
+import com.dailycurator.data.local.dao.GoalDao
+import com.dailycurator.data.local.dao.HabitDao
+import com.dailycurator.data.local.dao.TaskDao
+import com.dailycurator.data.local.entity.GoalEntity
+import com.dailycurator.data.local.entity.HabitEntity
+import com.dailycurator.data.local.entity.TaskEntity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+
+@Database(
+    entities = [TaskEntity::class, HabitEntity::class, GoalEntity::class],
+    version = 1,
+    exportSchema = false
+)
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun taskDao(): TaskDao
+    abstract fun habitDao(): HabitDao
+    abstract fun goalDao(): GoalDao
+
+    companion object {
+        @Volatile private var INSTANCE: AppDatabase? = null
+        private val DATE_FMT = DateTimeFormatter.ISO_LOCAL_DATE
+
+        fun getDatabase(context: Context): AppDatabase {
+            return INSTANCE ?: synchronized(this) {
+                Room.databaseBuilder(context, AppDatabase::class.java, "daily_curator.db")
+                    .addCallback(object : Callback() {
+                        override fun onCreate(db: SupportSQLiteDatabase) {
+                            super.onCreate(db)
+                            INSTANCE?.let { database ->
+                                CoroutineScope(Dispatchers.IO).launch { seedDatabase(database) }
+                            }
+                        }
+                    })
+                    .build().also { INSTANCE = it }
+            }
+        }
+
+        private suspend fun seedDatabase(db: AppDatabase) {
+            val today = LocalDate.now().format(DATE_FMT)
+            val weekStart = LocalDate.now().minusDays(LocalDate.now().dayOfWeek.value.toLong() - 1)
+                .format(DATE_FMT)
+
+            // Seed tasks
+            db.taskDao().apply {
+                insert(TaskEntity(rank = 1, title = "Finalize Q4 Budget Sheets",
+                    startTime = "09:00", endTime = "10:30", dueInfo = "Due by 4:00 PM",
+                    urgency = "GREEN", date = today, isProtected = false))
+                insert(TaskEntity(rank = 2, title = "Contract Review: Acme Corp",
+                    startTime = "11:00", endTime = "12:00", statusNote = "Legal approval pending",
+                    urgency = "GREEN", date = today))
+                insert(TaskEntity(rank = 3, title = "Hiring: Senior UI Designer",
+                    startTime = "13:30", endTime = "14:30", statusNote = "Review 5 portfolios",
+                    urgency = "GREEN", date = today))
+                insert(TaskEntity(rank = 4, title = "Presentation Prep: Board Meeting",
+                    startTime = "15:00", endTime = "16:30", statusNote = "Slide 12-24 remaining",
+                    urgency = "RED", date = today))
+                insert(TaskEntity(rank = 5, title = "Bi-Weekly Sync: Marketing",
+                    startTime = "16:30", endTime = "17:00", statusNote = "External Agency included",
+                    urgency = "NEUTRAL", date = today))
+            }
+
+            // Seed habits
+            db.habitDao().apply {
+                insert(HabitEntity(name = "Hydration Protocol", category = "PHYSICAL",
+                    habitType = "BUILDING", iconEmoji = "💧",
+                    currentValue = 2.2f, targetValue = 3.0f, unit = "L",
+                    streakDays = 12, date = today))
+                insert(HabitEntity(name = "Deep Focus Session", category = "MENTAL",
+                    habitType = "BUILDING", iconEmoji = "🧘",
+                    currentValue = 3f, targetValue = 5f, unit = "sessions",
+                    streakDays = 5, date = today))
+                insert(HabitEntity(name = "Sacred Reading", category = "SPIRITUAL",
+                    habitType = "BUILDING", iconEmoji = "📖",
+                    currentValue = 20f, targetValue = 20f, unit = "mins",
+                    streakDays = 28, date = today))
+                insert(HabitEntity(name = "Digital Distraction", category = "MENTAL",
+                    habitType = "ELIMINATING", iconEmoji = "📱",
+                    currentValue = 15f, targetValue = 30f, unit = "min limit",
+                    streakDays = 3, date = today))
+            }
+
+            // Seed goals
+            db.goalDao().apply {
+                insert(GoalEntity(title = "Finalize Q3 Pipeline Audit", isCompleted = true, weekStart = weekStart))
+                insert(GoalEntity(title = "Client Showcase Asset Selection", isCompleted = true, weekStart = weekStart))
+                insert(GoalEntity(title = "Weekly Team Performance Sync", isCompleted = true, weekStart = weekStart))
+                insert(GoalEntity(title = "Budget Forecast v2.0", isCompleted = false, weekStart = weekStart))
+                insert(GoalEntity(title = "Internal Architecture Refactor", isCompleted = false, weekStart = weekStart))
+            }
+        }
+    }
+}
