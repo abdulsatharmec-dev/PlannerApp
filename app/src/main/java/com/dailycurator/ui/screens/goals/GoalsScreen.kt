@@ -8,9 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,11 +23,22 @@ import com.dailycurator.ui.theme.*
 fun GoalsScreen(viewModel: GoalsViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsState()
     val progress = if (state.total > 0) state.completedCount.toFloat() / state.total else 0f
+    var showAddGoal by remember { mutableStateOf(false) }
+
+    if (showAddGoal) {
+        AddGoalDialog(
+            onDismiss = { showAddGoal = false },
+            onConfirm = { title ->
+                viewModel.addGoal(title)
+                showAddGoal = false
+            }
+        )
+    }
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background),
+            .background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(bottom = 32.dp)
     ) {
         item {
@@ -42,14 +51,17 @@ fun GoalsScreen(viewModel: GoalsViewModel = hiltViewModel()) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text("WEEKLY GOALS",
                         style = MaterialTheme.typography.labelSmall.copy(
-                            color = TextSecondary, letterSpacing = 1.sp))
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            letterSpacing = 1.sp))
                     Text("This Week",
-                        style = MaterialTheme.typography.displayLarge.copy(color = TextPrimary))
+                        style = MaterialTheme.typography.displayLarge.copy(
+                            color = MaterialTheme.colorScheme.onBackground))
                 }
                 Button(
-                    onClick = {},
+                    onClick = { showAddGoal = true },
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryButton)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer)
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null,
                         tint = Color.White, modifier = Modifier.size(16.dp))
@@ -68,7 +80,8 @@ fun GoalsScreen(viewModel: GoalsViewModel = hiltViewModel()) {
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Surface),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(0.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -78,7 +91,8 @@ fun GoalsScreen(viewModel: GoalsViewModel = hiltViewModel()) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("Progress Overview",
-                            style = MaterialTheme.typography.titleMedium.copy(color = TextPrimary))
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                color = MaterialTheme.colorScheme.onSurface))
                         Text("${state.completedCount} / ${state.total} Goals",
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 color = AccentGreen, fontWeight = FontWeight.SemiBold))
@@ -138,7 +152,7 @@ fun GoalsScreen(viewModel: GoalsViewModel = hiltViewModel()) {
             Spacer(Modifier.height(12.dp))
             Text("IN PROGRESS (${state.pendingGoals.size})",
                 style = MaterialTheme.typography.labelSmall.copy(
-                    color = TextSecondary, letterSpacing = 1.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp),
                 modifier = Modifier.padding(horizontal = 20.dp))
         }
         items(state.pendingGoals, key = { it.id }) { goal ->
@@ -148,4 +162,42 @@ fun GoalsScreen(viewModel: GoalsViewModel = hiltViewModel()) {
             )
         }
     }
+}
+
+// ── Add Goal Dialog ────────────────────────────────────────────────────────
+
+@Composable
+private fun AddGoalDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    var text by remember { mutableStateOf("") }
+    var isError by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = {
+            Text("New Weekly Goal",
+                style = MaterialTheme.typography.titleLarge.copy(
+                    color = MaterialTheme.colorScheme.onSurface))
+        },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it; isError = false },
+                label = { Text("Goal title") },
+                isError = isError,
+                supportingText = { if (isError) Text("Title is required") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            Button(onClick = {
+                if (text.isBlank()) { isError = true; return@Button }
+                onConfirm(text.trim())
+            }) { Text("Add Goal") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }

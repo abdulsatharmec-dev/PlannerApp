@@ -20,8 +20,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.dailycurator.data.model.PriorityTask
+import com.dailycurator.data.model.Urgency
 import com.dailycurator.ui.components.*
 import com.dailycurator.ui.theme.*
+import kotlinx.coroutines.delay
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -30,11 +32,22 @@ import java.time.format.DateTimeFormatter
 fun TodayScreen(viewModel: TodayViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsState()
     val todayLabel = LocalDate.now().format(DateTimeFormatter.ofPattern("MMM d"))
+    var showAddTask by remember { mutableStateOf(false) }
+
+    if (showAddTask) {
+        AddTaskDialog(
+            onDismiss = { showAddTask = false },
+            onConfirm = { title, start, end, urgency ->
+                viewModel.addTask(title, start, end, urgency)
+                showAddTask = false
+            }
+        )
+    }
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background),
+            .background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
         // ── Top App Bar
@@ -49,7 +62,7 @@ fun TodayScreen(viewModel: TodayViewModel = hiltViewModel()) {
                     modifier = Modifier
                         .size(36.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Primary),
+                        .background(MaterialTheme.colorScheme.primary),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Default.BookmarkBorder, contentDescription = null,
@@ -57,10 +70,11 @@ fun TodayScreen(viewModel: TodayViewModel = hiltViewModel()) {
                 }
                 Spacer(Modifier.width(10.dp))
                 Text("Daily Curator",
-                    style = MaterialTheme.typography.headlineMedium.copy(color = TextPrimary))
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        color = MaterialTheme.colorScheme.onBackground))
                 Spacer(Modifier.weight(1f))
                 Icon(Icons.Default.AutoAwesome, contentDescription = "AI",
-                    tint = Primary, modifier = Modifier.size(22.dp))
+                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
             }
         }
 
@@ -76,7 +90,8 @@ fun TodayScreen(viewModel: TodayViewModel = hiltViewModel()) {
         // ── Top 5 Priorities header
         item {
             Text("Top 5 Priorities",
-                style = MaterialTheme.typography.titleLarge.copy(color = TextPrimary),
+                style = MaterialTheme.typography.titleLarge.copy(
+                    color = MaterialTheme.colorScheme.onBackground),
                 modifier = Modifier.padding(horizontal = 20.dp))
             Spacer(Modifier.height(10.dp))
         }
@@ -95,13 +110,13 @@ fun TodayScreen(viewModel: TodayViewModel = hiltViewModel()) {
         item {
             Spacer(Modifier.height(4.dp))
             Button(
-                onClick = { /* TODO: open AddTaskSheet */ },
+                onClick = { showAddTask = true },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
                     .height(52.dp),
                 shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = PrimaryButton)
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
             ) {
                 Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
                 Spacer(Modifier.width(6.dp))
@@ -118,6 +133,7 @@ fun TodayScreen(viewModel: TodayViewModel = hiltViewModel()) {
                 collapsed = state.goalsCollapsed,
                 onToggleCollapse = viewModel::toggleGoalsCollapsed,
                 onToggleGoal = viewModel::toggleGoal,
+                onAddGoal = viewModel::addGoal,
                 insight = state.insight
             )
             Spacer(Modifier.height(24.dp))
@@ -135,31 +151,141 @@ fun TodayScreen(viewModel: TodayViewModel = hiltViewModel()) {
     }
 }
 
+// ── Add Task Dialog ────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddTaskDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String, LocalTime, LocalTime, Urgency) -> Unit
+) {
+    var title     by remember { mutableStateOf("") }
+    var startText by remember { mutableStateOf("09:00") }
+    var endText   by remember { mutableStateOf("10:00") }
+    var urgency   by remember { mutableStateOf(Urgency.GREEN) }
+    var titleError by remember { mutableStateOf(false) }
+
+    val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = {
+            Text("New Task",
+                style = MaterialTheme.typography.titleLarge.copy(
+                    color = MaterialTheme.colorScheme.onSurface))
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it; titleError = false },
+                    label = { Text("Task title") },
+                    isError = titleError,
+                    supportingText = { if (titleError) Text("Title is required") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = startText,
+                        onValueChange = { startText = it },
+                        label = { Text("Start (HH:mm)") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedTextField(
+                        value = endText,
+                        onValueChange = { endText = it },
+                        label = { Text("End (HH:mm)") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                // Urgency chips
+                Text("Priority", style = MaterialTheme.typography.labelMedium.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Urgency.values().forEach { u ->
+                        val label = when (u) {
+                            Urgency.GREEN   -> "Normal"
+                            Urgency.RED     -> "High"
+                            Urgency.NEUTRAL -> "Low"
+                        }
+                        val chipColor = when (u) {
+                            Urgency.GREEN   -> AccentGreen
+                            Urgency.RED     -> AccentRed
+                            Urgency.NEUTRAL -> MaterialTheme.colorScheme.outline
+                        }
+                        FilterChip(
+                            selected = urgency == u,
+                            onClick = { urgency = u },
+                            label = { Text(label) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = chipColor.copy(alpha = 0.15f),
+                                selectedLabelColor = chipColor
+                            )
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                if (title.isBlank()) { titleError = true; return@Button }
+                val start = runCatching { LocalTime.parse(startText, timeFmt) }.getOrElse { LocalTime.of(9, 0) }
+                val end   = runCatching { LocalTime.parse(endText, timeFmt) }.getOrElse { start.plusHours(1) }
+                onConfirm(title.trim(), start, end, urgency)
+            }) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+// ── Weekly Goals Section ───────────────────────────────────────────────────
+
 @Composable
 private fun WeeklyGoalsSection(
     goals: List<com.dailycurator.data.model.WeeklyGoal>,
     collapsed: Boolean,
     onToggleCollapse: () -> Unit,
     onToggleGoal: (com.dailycurator.data.model.WeeklyGoal) -> Unit,
+    onAddGoal: (String) -> Unit,
     insight: com.dailycurator.data.model.AiInsight
 ) {
     val completedCount = goals.count { it.isCompleted }
+    var showAddGoal by remember { mutableStateOf(false) }
+
+    if (showAddGoal) {
+        AddWeeklyGoalInlineDialog(onDismiss = { showAddGoal = false }, onConfirm = { title ->
+            onAddGoal(title)
+            showAddGoal = false
+        })
+    }
+
     Column(modifier = Modifier.padding(horizontal = 20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.AutoAwesome, contentDescription = null,
-                tint = Primary, modifier = Modifier.size(18.dp))
+                tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text("Weekly Goals",
-                    style = MaterialTheme.typography.titleLarge.copy(color = Primary))
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        color = MaterialTheme.colorScheme.primary))
                 Text("PROGRESS: $completedCount/${goals.size} GOALS",
                     style = MaterialTheme.typography.labelSmall.copy(
                         color = AccentGreen, fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp))
             }
+            IconButton(onClick = { showAddGoal = true }) {
+                Icon(Icons.Default.Add, contentDescription = "Add goal",
+                    tint = MaterialTheme.colorScheme.primary)
+            }
             IconButton(onClick = onToggleCollapse) {
                 Icon(
                     if (collapsed) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
-                    contentDescription = "Toggle", tint = TextSecondary
+                    contentDescription = "Toggle", tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -169,7 +295,7 @@ private fun WeeklyGoalsSection(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Surface),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(0.dp)
         ) {
             Row(modifier = Modifier.height(IntrinsicSize.Min)) {
@@ -190,17 +316,16 @@ private fun WeeklyGoalsSection(
                         }
                         Spacer(Modifier.width(6.dp))
                         Text(
-                            buildString {
-                                append("AI Insight: Slight delay on Strategy Audit due to unplanned syncs this morning.")
-                            },
-                            style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary)
+                            "AI Insight: Slight delay on Strategy Audit due to unplanned syncs this morning.",
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                color = MaterialTheme.colorScheme.onSurface)
                         )
                     }
                     if (insight.recoveryPlan != null) {
                         Spacer(Modifier.height(6.dp))
                         Text("Recovery plan: ${insight.recoveryPlan}",
                             style = MaterialTheme.typography.bodySmall.copy(
-                                color = TextSecondary,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Normal))
                     }
                 }
@@ -220,6 +345,33 @@ private fun WeeklyGoalsSection(
 }
 
 @Composable
+private fun AddWeeklyGoalInlineDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    var text by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text("New Weekly Goal",
+            style = MaterialTheme.typography.titleLarge.copy(
+                color = MaterialTheme.colorScheme.onSurface)) },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                label = { Text("Goal title") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            Button(onClick = { if (text.isNotBlank()) onConfirm(text.trim()) }) { Text("Add") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+// ── Today's Schedule Section ───────────────────────────────────────────────
+
+@Composable
 private fun TodayScheduleSection(
     events: List<com.dailycurator.data.model.ScheduleEvent>,
     activeTab: ScheduleTab,
@@ -235,10 +387,12 @@ private fun TodayScheduleSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("Schedule",
-                style = MaterialTheme.typography.headlineMedium.copy(color = TextPrimary),
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    color = MaterialTheme.colorScheme.onBackground),
                 modifier = Modifier.weight(1f))
             Text(dateLabel,
-                style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant))
         }
         Spacer(Modifier.height(10.dp))
 
@@ -249,13 +403,13 @@ private fun TodayScheduleSection(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
-                        .background(if (isActive) Primary else SurfaceVariant)
+                        .background(if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
                         .clickable { onTabChange(tab) }
                         .padding(horizontal = 16.dp, vertical = 7.dp)
                 ) {
                     Text(tab.name.lowercase().replaceFirstChar { it.uppercase() },
                         style = MaterialTheme.typography.bodySmall.copy(
-                            color = if (isActive) Color.White else TextSecondary,
+                            color = if (isActive) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal))
                 }
             }
@@ -272,36 +426,94 @@ private fun TodayScheduleSection(
     }
 }
 
+// ── Timeline View with live "NOW" indicator ────────────────────────────────
+
 @Composable
 private fun TimelineView(events: List<com.dailycurator.data.model.ScheduleEvent>) {
-    val now = remember { LocalTime.now() }
+    // Refresh current time every minute
+    var now by remember { mutableStateOf(LocalTime.now()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60_000L)
+            now = LocalTime.now()
+        }
+    }
     val fmt = DateTimeFormatter.ofPattern("HH:mm")
-    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-        events.forEach { event ->
-            val isNowBefore = now.isAfter(event.startTime) && now.isBefore(event.endTime)
-            val isNowAtStart = now.isBefore(event.startTime) &&
-                    (events.indexOf(event) == 0 ||
-                     now.isAfter(events[events.indexOf(event) - 1].endTime))
 
-            if (isNowAtStart || isNowBefore) {
-                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Text(now.format(fmt),
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = NowRed, fontWeight = FontWeight.Bold),
-                        modifier = Modifier.width(48.dp))
-                    Spacer(Modifier.width(8.dp))
-                    NowIndicator(modifier = Modifier.weight(1f))
+    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        // Track whether we've already shown the now-marker
+        var nowInserted = false
+
+        // Show NOW at the very top if it's before all events
+        if (events.isNotEmpty() && now.isBefore(events.first().startTime)) {
+            NowMarker(now = now, fmt = fmt)
+            nowInserted = true
+        }
+
+        events.forEachIndexed { index, event ->
+            // Insert NOW between events if it falls in this gap
+            if (!nowInserted && now.isAfter(event.endTime)) {
+                val nextEvent = events.getOrNull(index + 1)
+                if (nextEvent == null || now.isBefore(nextEvent.startTime)) {
+                    NowMarker(now = now, fmt = fmt)
+                    nowInserted = true
                 }
+            }
+            // Insert NOW if it's currently during this event
+            if (!nowInserted && now.isAfter(event.startTime) && now.isBefore(event.endTime)) {
+                NowMarker(now = now, fmt = fmt)
+                nowInserted = true
             }
 
             Row(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
                 Text(event.startTime.format(fmt),
-                    style = MaterialTheme.typography.bodySmall.copy(color = TextTertiary),
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant),
                     modifier = Modifier.width(48.dp).padding(top = 10.dp))
                 Spacer(Modifier.width(8.dp))
                 TimelineEventCard(event = event, modifier = Modifier.weight(1f))
             }
         }
+
+        // Show NOW after all events have passed
+        if (!nowInserted && events.isNotEmpty() && now.isAfter(events.last().endTime)) {
+            NowMarker(now = now, fmt = fmt)
+        }
+    }
+}
+
+@Composable
+private fun NowMarker(now: LocalTime, fmt: DateTimeFormatter) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Time pill badge
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(NowRed)
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            Text(
+                now.format(fmt),
+                style = MaterialTheme.typography.labelSmall.copy(
+                    color = Color.White,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.5.sp
+                )
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        NowIndicator(modifier = Modifier.weight(1f))
+        // Red dot at the end
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(NowRed)
+        )
     }
 }

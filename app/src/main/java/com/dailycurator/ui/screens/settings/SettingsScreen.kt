@@ -9,6 +9,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -16,19 +18,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.dailycurator.ui.theme.*
 
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
+    val isDark by viewModel.isDarkTheme.collectAsState()
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background),
+            .background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(bottom = 32.dp)
     ) {
         item {
             Text("Settings",
-                style = MaterialTheme.typography.displayLarge.copy(color = TextPrimary),
+                style = MaterialTheme.typography.displayLarge.copy(
+                    color = MaterialTheme.colorScheme.onSurface),
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp))
         }
         item {
@@ -47,7 +53,45 @@ fun SettingsScreen() {
         item {
             Spacer(Modifier.height(16.dp))
             SettingsGroup(title = "Appearance") {
-                SettingsRow(icon = Icons.Default.Palette, label = "Theme") {}
+                // Dark Theme toggle row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { viewModel.toggleDarkTheme() }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            if (isDark) Icons.Default.DarkMode else Icons.Default.LightMode,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        if (isDark) "Dark Theme" else "Light Theme",
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Medium),
+                        modifier = Modifier.weight(1f)
+                    )
+                    Switch(
+                        checked = isDark,
+                        onCheckedChange = { viewModel.toggleDarkTheme() },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
             }
         }
         item {
@@ -65,11 +109,12 @@ private fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> 
     Column(modifier = Modifier.padding(horizontal = 20.dp)) {
         Text(title.uppercase(),
             style = MaterialTheme.typography.labelSmall.copy(
-                color = TextSecondary, fontWeight = FontWeight.SemiBold))
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold))
         Spacer(Modifier.height(8.dp))
         Card(
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Surface),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(0.dp)
         ) { Column { content() } }
     }
@@ -88,15 +133,20 @@ private fun SettingsRow(icon: ImageVector, label: String, onClick: () -> Unit) {
             modifier = Modifier
                 .size(34.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(InsightBg),
+                .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, contentDescription = null, tint = Primary, modifier = Modifier.size(18.dp))
+            Icon(icon, contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp))
         }
         Spacer(Modifier.width(12.dp))
         Text(label, style = MaterialTheme.typography.bodyLarge.copy(
-            color = TextPrimary, fontWeight = FontWeight.Medium),
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Medium),
             modifier = Modifier.weight(1f))
-        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextTertiary)
+        Icon(Icons.Default.ChevronRight, contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
+

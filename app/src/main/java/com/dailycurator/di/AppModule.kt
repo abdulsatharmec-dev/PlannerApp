@@ -2,6 +2,7 @@ package com.dailycurator.di
 
 import android.content.Context
 import com.dailycurator.data.local.AppDatabase
+import com.dailycurator.data.local.AppPreferences
 import com.dailycurator.data.local.dao.GoalDao
 import com.dailycurator.data.local.dao.HabitDao
 import com.dailycurator.data.local.dao.TaskDao
@@ -27,4 +28,9 @@ object AppModule {
 
     @Provides @Singleton
     fun provideGoalDao(db: AppDatabase): GoalDao = db.goalDao()
+
+    @Provides @Singleton
+    fun provideAppPreferences(@ApplicationContext context: Context): AppPreferences =
+        AppPreferences(context)
 }
+

@@ -7,12 +7,14 @@ import androidx.fragment.app.Fragment;
 import androidx.lifecycle.SavedStateHandle;
 import androidx.lifecycle.ViewModel;
 import com.dailycurator.data.local.AppDatabase;
+import com.dailycurator.data.local.AppPreferences;
 import com.dailycurator.data.local.dao.GoalDao;
 import com.dailycurator.data.local.dao.HabitDao;
 import com.dailycurator.data.local.dao.TaskDao;
 import com.dailycurator.data.repository.GoalRepository;
 import com.dailycurator.data.repository.HabitRepository;
 import com.dailycurator.data.repository.TaskRepository;
+import com.dailycurator.di.AppModule_ProvideAppPreferencesFactory;
 import com.dailycurator.di.AppModule_ProvideDatabaseFactory;
 import com.dailycurator.di.AppModule_ProvideGoalDaoFactory;
 import com.dailycurator.di.AppModule_ProvideHabitDaoFactory;
@@ -21,6 +23,8 @@ import com.dailycurator.ui.screens.goals.GoalsViewModel;
 import com.dailycurator.ui.screens.goals.GoalsViewModel_HiltModules;
 import com.dailycurator.ui.screens.habits.HabitsViewModel;
 import com.dailycurator.ui.screens.habits.HabitsViewModel_HiltModules;
+import com.dailycurator.ui.screens.settings.SettingsViewModel;
+import com.dailycurator.ui.screens.settings.SettingsViewModel_HiltModules;
 import com.dailycurator.ui.screens.today.TodayViewModel;
 import com.dailycurator.ui.screens.today.TodayViewModel_HiltModules;
 import dagger.hilt.android.ActivityRetainedLifecycle;
@@ -374,6 +378,7 @@ public final class DaggerDailyCuratorApp_HiltComponents_SingletonC {
 
     @Override
     public void injectMainActivity(MainActivity mainActivity) {
+      injectMainActivity2(mainActivity);
     }
 
     @Override
@@ -383,7 +388,7 @@ public final class DaggerDailyCuratorApp_HiltComponents_SingletonC {
 
     @Override
     public Map<Class<?>, Boolean> getViewModelKeys() {
-      return LazyClassKeyMap.<Boolean>of(MapBuilder.<String, Boolean>newMapBuilder(3).put(LazyClassKeyProvider.com_dailycurator_ui_screens_goals_GoalsViewModel, GoalsViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_dailycurator_ui_screens_habits_HabitsViewModel, HabitsViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_dailycurator_ui_screens_today_TodayViewModel, TodayViewModel_HiltModules.KeyModule.provide()).build());
+      return LazyClassKeyMap.<Boolean>of(MapBuilder.<String, Boolean>newMapBuilder(4).put(LazyClassKeyProvider.com_dailycurator_ui_screens_goals_GoalsViewModel, GoalsViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_dailycurator_ui_screens_habits_HabitsViewModel, HabitsViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_dailycurator_ui_screens_settings_SettingsViewModel, SettingsViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_dailycurator_ui_screens_today_TodayViewModel, TodayViewModel_HiltModules.KeyModule.provide()).build());
     }
 
     @Override
@@ -401,19 +406,29 @@ public final class DaggerDailyCuratorApp_HiltComponents_SingletonC {
       return new ViewCBuilder(singletonCImpl, activityRetainedCImpl, activityCImpl);
     }
 
+    private MainActivity injectMainActivity2(MainActivity instance) {
+      MainActivity_MembersInjector.injectPrefs(instance, singletonCImpl.provideAppPreferencesProvider.get());
+      return instance;
+    }
+
     @IdentifierNameString
     private static final class LazyClassKeyProvider {
-      static String com_dailycurator_ui_screens_today_TodayViewModel = "com.dailycurator.ui.screens.today.TodayViewModel";
-
       static String com_dailycurator_ui_screens_habits_HabitsViewModel = "com.dailycurator.ui.screens.habits.HabitsViewModel";
+
+      static String com_dailycurator_ui_screens_settings_SettingsViewModel = "com.dailycurator.ui.screens.settings.SettingsViewModel";
+
+      static String com_dailycurator_ui_screens_today_TodayViewModel = "com.dailycurator.ui.screens.today.TodayViewModel";
 
       static String com_dailycurator_ui_screens_goals_GoalsViewModel = "com.dailycurator.ui.screens.goals.GoalsViewModel";
 
       @KeepFieldType
-      TodayViewModel com_dailycurator_ui_screens_today_TodayViewModel2;
+      HabitsViewModel com_dailycurator_ui_screens_habits_HabitsViewModel2;
 
       @KeepFieldType
-      HabitsViewModel com_dailycurator_ui_screens_habits_HabitsViewModel2;
+      SettingsViewModel com_dailycurator_ui_screens_settings_SettingsViewModel2;
+
+      @KeepFieldType
+      TodayViewModel com_dailycurator_ui_screens_today_TodayViewModel2;
 
       @KeepFieldType
       GoalsViewModel com_dailycurator_ui_screens_goals_GoalsViewModel2;
@@ -430,6 +445,8 @@ public final class DaggerDailyCuratorApp_HiltComponents_SingletonC {
     private Provider<GoalsViewModel> goalsViewModelProvider;
 
     private Provider<HabitsViewModel> habitsViewModelProvider;
+
+    private Provider<SettingsViewModel> settingsViewModelProvider;
 
     private Provider<TodayViewModel> todayViewModelProvider;
 
@@ -448,12 +465,13 @@ public final class DaggerDailyCuratorApp_HiltComponents_SingletonC {
         final ViewModelLifecycle viewModelLifecycleParam) {
       this.goalsViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 0);
       this.habitsViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 1);
-      this.todayViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 2);
+      this.settingsViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 2);
+      this.todayViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 3);
     }
 
     @Override
     public Map<Class<?>, javax.inject.Provider<ViewModel>> getHiltViewModelMap() {
-      return LazyClassKeyMap.<javax.inject.Provider<ViewModel>>of(MapBuilder.<String, javax.inject.Provider<ViewModel>>newMapBuilder(3).put(LazyClassKeyProvider.com_dailycurator_ui_screens_goals_GoalsViewModel, ((Provider) goalsViewModelProvider)).put(LazyClassKeyProvider.com_dailycurator_ui_screens_habits_HabitsViewModel, ((Provider) habitsViewModelProvider)).put(LazyClassKeyProvider.com_dailycurator_ui_screens_today_TodayViewModel, ((Provider) todayViewModelProvider)).build());
+      return LazyClassKeyMap.<javax.inject.Provider<ViewModel>>of(MapBuilder.<String, javax.inject.Provider<ViewModel>>newMapBuilder(4).put(LazyClassKeyProvider.com_dailycurator_ui_screens_goals_GoalsViewModel, ((Provider) goalsViewModelProvider)).put(LazyClassKeyProvider.com_dailycurator_ui_screens_habits_HabitsViewModel, ((Provider) habitsViewModelProvider)).put(LazyClassKeyProvider.com_dailycurator_ui_screens_settings_SettingsViewModel, ((Provider) settingsViewModelProvider)).put(LazyClassKeyProvider.com_dailycurator_ui_screens_today_TodayViewModel, ((Provider) todayViewModelProvider)).build());
     }
 
     @Override
@@ -465,18 +483,23 @@ public final class DaggerDailyCuratorApp_HiltComponents_SingletonC {
     private static final class LazyClassKeyProvider {
       static String com_dailycurator_ui_screens_goals_GoalsViewModel = "com.dailycurator.ui.screens.goals.GoalsViewModel";
 
-      static String com_dailycurator_ui_screens_habits_HabitsViewModel = "com.dailycurator.ui.screens.habits.HabitsViewModel";
+      static String com_dailycurator_ui_screens_settings_SettingsViewModel = "com.dailycurator.ui.screens.settings.SettingsViewModel";
 
       static String com_dailycurator_ui_screens_today_TodayViewModel = "com.dailycurator.ui.screens.today.TodayViewModel";
+
+      static String com_dailycurator_ui_screens_habits_HabitsViewModel = "com.dailycurator.ui.screens.habits.HabitsViewModel";
 
       @KeepFieldType
       GoalsViewModel com_dailycurator_ui_screens_goals_GoalsViewModel2;
 
       @KeepFieldType
-      HabitsViewModel com_dailycurator_ui_screens_habits_HabitsViewModel2;
+      SettingsViewModel com_dailycurator_ui_screens_settings_SettingsViewModel2;
 
       @KeepFieldType
       TodayViewModel com_dailycurator_ui_screens_today_TodayViewModel2;
+
+      @KeepFieldType
+      HabitsViewModel com_dailycurator_ui_screens_habits_HabitsViewModel2;
     }
 
     private static final class SwitchingProvider<T> implements Provider<T> {
@@ -506,7 +529,10 @@ public final class DaggerDailyCuratorApp_HiltComponents_SingletonC {
           case 1: // com.dailycurator.ui.screens.habits.HabitsViewModel 
           return (T) new HabitsViewModel(singletonCImpl.habitRepositoryProvider.get());
 
-          case 2: // com.dailycurator.ui.screens.today.TodayViewModel 
+          case 2: // com.dailycurator.ui.screens.settings.SettingsViewModel 
+          return (T) new SettingsViewModel(singletonCImpl.provideAppPreferencesProvider.get());
+
+          case 3: // com.dailycurator.ui.screens.today.TodayViewModel 
           return (T) new TodayViewModel(singletonCImpl.taskRepositoryProvider.get(), singletonCImpl.goalRepositoryProvider.get());
 
           default: throw new AssertionError(id);
@@ -589,6 +615,8 @@ public final class DaggerDailyCuratorApp_HiltComponents_SingletonC {
 
     private final SingletonCImpl singletonCImpl = this;
 
+    private Provider<AppPreferences> provideAppPreferencesProvider;
+
     private Provider<AppDatabase> provideDatabaseProvider;
 
     private Provider<GoalDao> provideGoalDaoProvider;
@@ -611,13 +639,14 @@ public final class DaggerDailyCuratorApp_HiltComponents_SingletonC {
 
     @SuppressWarnings("unchecked")
     private void initialize(final ApplicationContextModule applicationContextModuleParam) {
-      this.provideDatabaseProvider = DoubleCheck.provider(new SwitchingProvider<AppDatabase>(singletonCImpl, 2));
-      this.provideGoalDaoProvider = DoubleCheck.provider(new SwitchingProvider<GoalDao>(singletonCImpl, 1));
-      this.goalRepositoryProvider = DoubleCheck.provider(new SwitchingProvider<GoalRepository>(singletonCImpl, 0));
-      this.provideHabitDaoProvider = DoubleCheck.provider(new SwitchingProvider<HabitDao>(singletonCImpl, 4));
-      this.habitRepositoryProvider = DoubleCheck.provider(new SwitchingProvider<HabitRepository>(singletonCImpl, 3));
-      this.provideTaskDaoProvider = DoubleCheck.provider(new SwitchingProvider<TaskDao>(singletonCImpl, 6));
-      this.taskRepositoryProvider = DoubleCheck.provider(new SwitchingProvider<TaskRepository>(singletonCImpl, 5));
+      this.provideAppPreferencesProvider = DoubleCheck.provider(new SwitchingProvider<AppPreferences>(singletonCImpl, 0));
+      this.provideDatabaseProvider = DoubleCheck.provider(new SwitchingProvider<AppDatabase>(singletonCImpl, 3));
+      this.provideGoalDaoProvider = DoubleCheck.provider(new SwitchingProvider<GoalDao>(singletonCImpl, 2));
+      this.goalRepositoryProvider = DoubleCheck.provider(new SwitchingProvider<GoalRepository>(singletonCImpl, 1));
+      this.provideHabitDaoProvider = DoubleCheck.provider(new SwitchingProvider<HabitDao>(singletonCImpl, 5));
+      this.habitRepositoryProvider = DoubleCheck.provider(new SwitchingProvider<HabitRepository>(singletonCImpl, 4));
+      this.provideTaskDaoProvider = DoubleCheck.provider(new SwitchingProvider<TaskDao>(singletonCImpl, 7));
+      this.taskRepositoryProvider = DoubleCheck.provider(new SwitchingProvider<TaskRepository>(singletonCImpl, 6));
     }
 
     @Override
@@ -653,25 +682,28 @@ public final class DaggerDailyCuratorApp_HiltComponents_SingletonC {
       @Override
       public T get() {
         switch (id) {
-          case 0: // com.dailycurator.data.repository.GoalRepository 
+          case 0: // com.dailycurator.data.local.AppPreferences 
+          return (T) AppModule_ProvideAppPreferencesFactory.provideAppPreferences(ApplicationContextModule_ProvideContextFactory.provideContext(singletonCImpl.applicationContextModule));
+
+          case 1: // com.dailycurator.data.repository.GoalRepository 
           return (T) new GoalRepository(singletonCImpl.provideGoalDaoProvider.get());
 
-          case 1: // com.dailycurator.data.local.dao.GoalDao 
+          case 2: // com.dailycurator.data.local.dao.GoalDao 
           return (T) AppModule_ProvideGoalDaoFactory.provideGoalDao(singletonCImpl.provideDatabaseProvider.get());
 
-          case 2: // com.dailycurator.data.local.AppDatabase 
+          case 3: // com.dailycurator.data.local.AppDatabase 
           return (T) AppModule_ProvideDatabaseFactory.provideDatabase(ApplicationContextModule_ProvideContextFactory.provideContext(singletonCImpl.applicationContextModule));
 
-          case 3: // com.dailycurator.data.repository.HabitRepository 
+          case 4: // com.dailycurator.data.repository.HabitRepository 
           return (T) new HabitRepository(singletonCImpl.provideHabitDaoProvider.get());
 
-          case 4: // com.dailycurator.data.local.dao.HabitDao 
+          case 5: // com.dailycurator.data.local.dao.HabitDao 
           return (T) AppModule_ProvideHabitDaoFactory.provideHabitDao(singletonCImpl.provideDatabaseProvider.get());
 
-          case 5: // com.dailycurator.data.repository.TaskRepository 
+          case 6: // com.dailycurator.data.repository.TaskRepository 
           return (T) new TaskRepository(singletonCImpl.provideTaskDaoProvider.get());
 
-          case 6: // com.dailycurator.data.local.dao.TaskDao 
+          case 7: // com.dailycurator.data.local.dao.TaskDao 
           return (T) AppModule_ProvideTaskDaoFactory.provideTaskDao(singletonCImpl.provideDatabaseProvider.get());
 
           default: throw new AssertionError(id);

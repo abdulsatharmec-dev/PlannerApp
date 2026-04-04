@@ -35,4 +35,9 @@ class GoalsViewModel @Inject constructor(
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GoalsUiState())
 
     fun toggleGoal(goal: WeeklyGoal) = viewModelScope.launch { repo.toggleCompleted(goal) }
+
+    fun addGoal(title: String) = viewModelScope.launch {
+        repo.insert(WeeklyGoal(title = title, weekStart = weekStart))
+    }
 }
+

@@ -57,6 +57,29 @@ class TodayViewModel @Inject constructor(
     fun setScheduleTab(tab: ScheduleTab) = _uiState.update { it.copy(scheduleTab = tab) }
     fun toggleGoal(goal: WeeklyGoal) = viewModelScope.launch { goalRepo.toggleCompleted(goal) }
 
+    fun addTask(
+        title: String,
+        startTime: LocalTime,
+        endTime: LocalTime,
+        urgency: Urgency = Urgency.GREEN
+    ) = viewModelScope.launch {
+        val nextRank = (_uiState.value.tasks.maxOfOrNull { it.rank } ?: 0) + 1
+        taskRepo.insert(
+            PriorityTask(
+                rank = nextRank,
+                title = title,
+                startTime = startTime,
+                endTime = endTime,
+                urgency = urgency,
+                date = today
+            )
+        )
+    }
+
+    fun addGoal(title: String) = viewModelScope.launch {
+        goalRepo.insert(WeeklyGoal(title = title, weekStart = weekStart))
+    }
+
     private fun List<PriorityTask>.toScheduleEvents(): List<ScheduleEvent> = map { task ->
         ScheduleEvent(
             id = task.id, title = task.title,
@@ -69,3 +92,4 @@ class TodayViewModel @Inject constructor(
         )
     }
 }
+
