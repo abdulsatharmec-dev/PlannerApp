@@ -25,18 +25,39 @@ class HabitRepository @Inject constructor(private val dao: HabitDao) {
                     iconEmoji = e.iconEmoji,
                     currentValue = e.currentValue, targetValue = e.targetValue,
                     unit = e.unit, streakDays = e.streakDays,
-                    date = LocalDate.parse(e.date, DATE_FMT))
+                    date = LocalDate.parse(e.date, DATE_FMT),
+                    isDone = e.isDone, doneNote = e.doneNote)
             }
         }
 
     suspend fun insert(habit: Habit) = dao.insert(
-        HabitEntity(name = habit.name, category = habit.category.name,
+        HabitEntity(id = habit.id, name = habit.name, category = habit.category.name,
             habitType = habit.habitType.name, iconEmoji = habit.iconEmoji,
             currentValue = habit.currentValue, targetValue = habit.targetValue,
             unit = habit.unit, streakDays = habit.streakDays,
-            date = habit.date.format(DATE_FMT))
+            date = habit.date.format(DATE_FMT), isDone = habit.isDone, doneNote = habit.doneNote)
     )
 
     suspend fun update(entity: HabitEntity) = dao.update(entity)
     suspend fun delete(entity: HabitEntity) = dao.delete(entity)
+
+    suspend fun update(habit: Habit) = dao.update(
+        HabitEntity(id = habit.id, name = habit.name, category = habit.category.name,
+            habitType = habit.habitType.name, iconEmoji = habit.iconEmoji,
+            currentValue = habit.currentValue, targetValue = habit.targetValue,
+            unit = habit.unit, streakDays = habit.streakDays,
+            date = habit.date.format(DATE_FMT), isDone = habit.isDone, doneNote = habit.doneNote)
+    )
+
+    suspend fun delete(habit: Habit) = dao.delete(
+        HabitEntity(id = habit.id, name = habit.name, category = habit.category.name,
+            habitType = habit.habitType.name, iconEmoji = habit.iconEmoji,
+            currentValue = habit.currentValue, targetValue = habit.targetValue,
+            unit = habit.unit, streakDays = habit.streakDays,
+            date = habit.date.format(DATE_FMT), isDone = habit.isDone, doneNote = habit.doneNote)
+    )
+
+    suspend fun markHabitDone(habit: Habit, note: String?) {
+        update(habit.copy(isDone = true, doneNote = note))
+    }
 }

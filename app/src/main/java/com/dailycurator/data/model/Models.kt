@@ -36,6 +36,10 @@ data class ScheduleEvent(
 data class WeeklyGoal(
     val id: Long = 0,
     val title: String,
+    val description: String? = null,
+    val deadline: String? = null,
+    val timeEstimate: String? = null,
+    val category: String = "Spiritual",
     val isCompleted: Boolean = false,
     val weekStart: LocalDate = LocalDate.now()
 )
@@ -50,7 +54,9 @@ data class Habit(
     val targetValue: Float,
     val unit: String,
     val streakDays: Int = 0,
-    val date: LocalDate = LocalDate.now()
+    val date: LocalDate = LocalDate.now(),
+    val isDone: Boolean = false,
+    val doneNote: String? = null
 ) {
     val progress: Float get() = (currentValue / targetValue).coerceIn(0f, 1f)
     val isGoalMet: Boolean get() = currentValue >= targetValue

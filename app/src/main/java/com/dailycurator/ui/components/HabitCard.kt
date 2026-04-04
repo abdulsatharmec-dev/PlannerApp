@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -22,7 +23,11 @@ import com.dailycurator.data.model.HabitType
 import com.dailycurator.ui.theme.*
 
 @Composable
-fun HabitCard(habit: Habit, modifier: Modifier = Modifier) {
+fun HabitCard(
+    habit: Habit,
+    modifier: Modifier = Modifier,
+    onMarkDoneClick: () -> Unit = {}
+) {
     val isEliminating = habit.habitType == HabitType.ELIMINATING
     val categoryColor = when (habit.category) {
         HabitCategory.PHYSICAL  -> AccentTeal
@@ -51,10 +56,12 @@ fun HabitCard(habit: Habit, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Surface),
+        colors = CardDefaults.cardColors(
+            containerColor = if (habit.isDone) Surface.copy(alpha = 0.5f) else Surface
+        ),
         elevation = CardDefaults.cardElevation(0.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(16.dp).let { if (habit.isDone) it.background(Color.Transparent).alpha(0.6f) else it }) {
             Row(verticalAlignment = Alignment.Top) {
                 // Icon box
                 Box(
@@ -80,6 +87,22 @@ fun HabitCard(habit: Habit, modifier: Modifier = Modifier) {
                     )
                 }
                 Column(horizontalAlignment = Alignment.End) {
+                    if (!habit.isDone) {
+                        Button(
+                            onClick = onMarkDoneClick,
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            modifier = Modifier.height(30.dp)
+                        ) {
+                            Text("Done", fontSize = 12.sp)
+                        }
+                    } else {
+                        Text(
+                            "Completed",
+                            style = MaterialTheme.typography.bodySmall.copy(color = AccentDeepGreen, fontWeight = FontWeight.Bold)
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
                     Text(
                         if (isEliminating) "Resistance" else "Streak",
                         style = MaterialTheme.typography.bodySmall
@@ -131,13 +154,18 @@ fun HabitCard(habit: Habit, modifier: Modifier = Modifier) {
             }
             Spacer(Modifier.height(6.dp))
             // Bottom note
-            val note = when {
+            val baseNote = when {
                 habit.isGoalMet -> "Completed for today"
                 isEliminating   -> "${(habit.targetValue - habit.currentValue).toInt()} ${habit.unit.replace("limit","").trim()} remaining allowance"
                 habit.unit.contains("L") -> "%.1fL remaining to goal".format(habit.targetValue - habit.currentValue)
                 else -> "${(habit.targetValue - habit.currentValue).toInt()} ${habit.unit} remaining to goal"
             }
-            Text(note,
+            val finalNote = if (habit.isDone && habit.doneNote != null) {
+                "$baseNote - ${habit.doneNote}"
+            } else {
+                baseNote
+            }
+            Text(finalNote,
                 style = MaterialTheme.typography.bodySmall.copy(
                     color = if (habit.isGoalMet) AccentDeepGreen else TextTertiary))
         }

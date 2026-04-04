@@ -25,6 +25,8 @@ import com.dailycurator.ui.screens.habits.HabitsViewModel;
 import com.dailycurator.ui.screens.habits.HabitsViewModel_HiltModules;
 import com.dailycurator.ui.screens.settings.SettingsViewModel;
 import com.dailycurator.ui.screens.settings.SettingsViewModel_HiltModules;
+import com.dailycurator.ui.screens.tasks.TasksViewModel;
+import com.dailycurator.ui.screens.tasks.TasksViewModel_HiltModules;
 import com.dailycurator.ui.screens.today.TodayViewModel;
 import com.dailycurator.ui.screens.today.TodayViewModel_HiltModules;
 import dagger.hilt.android.ActivityRetainedLifecycle;
@@ -388,7 +390,7 @@ public final class DaggerDailyCuratorApp_HiltComponents_SingletonC {
 
     @Override
     public Map<Class<?>, Boolean> getViewModelKeys() {
-      return LazyClassKeyMap.<Boolean>of(MapBuilder.<String, Boolean>newMapBuilder(4).put(LazyClassKeyProvider.com_dailycurator_ui_screens_goals_GoalsViewModel, GoalsViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_dailycurator_ui_screens_habits_HabitsViewModel, HabitsViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_dailycurator_ui_screens_settings_SettingsViewModel, SettingsViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_dailycurator_ui_screens_today_TodayViewModel, TodayViewModel_HiltModules.KeyModule.provide()).build());
+      return LazyClassKeyMap.<Boolean>of(MapBuilder.<String, Boolean>newMapBuilder(5).put(LazyClassKeyProvider.com_dailycurator_ui_screens_goals_GoalsViewModel, GoalsViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_dailycurator_ui_screens_habits_HabitsViewModel, HabitsViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_dailycurator_ui_screens_settings_SettingsViewModel, SettingsViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_dailycurator_ui_screens_tasks_TasksViewModel, TasksViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_dailycurator_ui_screens_today_TodayViewModel, TodayViewModel_HiltModules.KeyModule.provide()).build());
     }
 
     @Override
@@ -413,25 +415,30 @@ public final class DaggerDailyCuratorApp_HiltComponents_SingletonC {
 
     @IdentifierNameString
     private static final class LazyClassKeyProvider {
-      static String com_dailycurator_ui_screens_habits_HabitsViewModel = "com.dailycurator.ui.screens.habits.HabitsViewModel";
+      static String com_dailycurator_ui_screens_goals_GoalsViewModel = "com.dailycurator.ui.screens.goals.GoalsViewModel";
 
       static String com_dailycurator_ui_screens_settings_SettingsViewModel = "com.dailycurator.ui.screens.settings.SettingsViewModel";
 
+      static String com_dailycurator_ui_screens_habits_HabitsViewModel = "com.dailycurator.ui.screens.habits.HabitsViewModel";
+
+      static String com_dailycurator_ui_screens_tasks_TasksViewModel = "com.dailycurator.ui.screens.tasks.TasksViewModel";
+
       static String com_dailycurator_ui_screens_today_TodayViewModel = "com.dailycurator.ui.screens.today.TodayViewModel";
 
-      static String com_dailycurator_ui_screens_goals_GoalsViewModel = "com.dailycurator.ui.screens.goals.GoalsViewModel";
-
       @KeepFieldType
-      HabitsViewModel com_dailycurator_ui_screens_habits_HabitsViewModel2;
+      GoalsViewModel com_dailycurator_ui_screens_goals_GoalsViewModel2;
 
       @KeepFieldType
       SettingsViewModel com_dailycurator_ui_screens_settings_SettingsViewModel2;
 
       @KeepFieldType
-      TodayViewModel com_dailycurator_ui_screens_today_TodayViewModel2;
+      HabitsViewModel com_dailycurator_ui_screens_habits_HabitsViewModel2;
 
       @KeepFieldType
-      GoalsViewModel com_dailycurator_ui_screens_goals_GoalsViewModel2;
+      TasksViewModel com_dailycurator_ui_screens_tasks_TasksViewModel2;
+
+      @KeepFieldType
+      TodayViewModel com_dailycurator_ui_screens_today_TodayViewModel2;
     }
   }
 
@@ -447,6 +454,8 @@ public final class DaggerDailyCuratorApp_HiltComponents_SingletonC {
     private Provider<HabitsViewModel> habitsViewModelProvider;
 
     private Provider<SettingsViewModel> settingsViewModelProvider;
+
+    private Provider<TasksViewModel> tasksViewModelProvider;
 
     private Provider<TodayViewModel> todayViewModelProvider;
 
@@ -466,12 +475,13 @@ public final class DaggerDailyCuratorApp_HiltComponents_SingletonC {
       this.goalsViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 0);
       this.habitsViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 1);
       this.settingsViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 2);
-      this.todayViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 3);
+      this.tasksViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 3);
+      this.todayViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 4);
     }
 
     @Override
     public Map<Class<?>, javax.inject.Provider<ViewModel>> getHiltViewModelMap() {
-      return LazyClassKeyMap.<javax.inject.Provider<ViewModel>>of(MapBuilder.<String, javax.inject.Provider<ViewModel>>newMapBuilder(4).put(LazyClassKeyProvider.com_dailycurator_ui_screens_goals_GoalsViewModel, ((Provider) goalsViewModelProvider)).put(LazyClassKeyProvider.com_dailycurator_ui_screens_habits_HabitsViewModel, ((Provider) habitsViewModelProvider)).put(LazyClassKeyProvider.com_dailycurator_ui_screens_settings_SettingsViewModel, ((Provider) settingsViewModelProvider)).put(LazyClassKeyProvider.com_dailycurator_ui_screens_today_TodayViewModel, ((Provider) todayViewModelProvider)).build());
+      return LazyClassKeyMap.<javax.inject.Provider<ViewModel>>of(MapBuilder.<String, javax.inject.Provider<ViewModel>>newMapBuilder(5).put(LazyClassKeyProvider.com_dailycurator_ui_screens_goals_GoalsViewModel, ((Provider) goalsViewModelProvider)).put(LazyClassKeyProvider.com_dailycurator_ui_screens_habits_HabitsViewModel, ((Provider) habitsViewModelProvider)).put(LazyClassKeyProvider.com_dailycurator_ui_screens_settings_SettingsViewModel, ((Provider) settingsViewModelProvider)).put(LazyClassKeyProvider.com_dailycurator_ui_screens_tasks_TasksViewModel, ((Provider) tasksViewModelProvider)).put(LazyClassKeyProvider.com_dailycurator_ui_screens_today_TodayViewModel, ((Provider) todayViewModelProvider)).build());
     }
 
     @Override
@@ -481,25 +491,30 @@ public final class DaggerDailyCuratorApp_HiltComponents_SingletonC {
 
     @IdentifierNameString
     private static final class LazyClassKeyProvider {
-      static String com_dailycurator_ui_screens_goals_GoalsViewModel = "com.dailycurator.ui.screens.goals.GoalsViewModel";
+      static String com_dailycurator_ui_screens_habits_HabitsViewModel = "com.dailycurator.ui.screens.habits.HabitsViewModel";
 
       static String com_dailycurator_ui_screens_settings_SettingsViewModel = "com.dailycurator.ui.screens.settings.SettingsViewModel";
 
+      static String com_dailycurator_ui_screens_tasks_TasksViewModel = "com.dailycurator.ui.screens.tasks.TasksViewModel";
+
+      static String com_dailycurator_ui_screens_goals_GoalsViewModel = "com.dailycurator.ui.screens.goals.GoalsViewModel";
+
       static String com_dailycurator_ui_screens_today_TodayViewModel = "com.dailycurator.ui.screens.today.TodayViewModel";
 
-      static String com_dailycurator_ui_screens_habits_HabitsViewModel = "com.dailycurator.ui.screens.habits.HabitsViewModel";
-
       @KeepFieldType
-      GoalsViewModel com_dailycurator_ui_screens_goals_GoalsViewModel2;
+      HabitsViewModel com_dailycurator_ui_screens_habits_HabitsViewModel2;
 
       @KeepFieldType
       SettingsViewModel com_dailycurator_ui_screens_settings_SettingsViewModel2;
 
       @KeepFieldType
-      TodayViewModel com_dailycurator_ui_screens_today_TodayViewModel2;
+      TasksViewModel com_dailycurator_ui_screens_tasks_TasksViewModel2;
 
       @KeepFieldType
-      HabitsViewModel com_dailycurator_ui_screens_habits_HabitsViewModel2;
+      GoalsViewModel com_dailycurator_ui_screens_goals_GoalsViewModel2;
+
+      @KeepFieldType
+      TodayViewModel com_dailycurator_ui_screens_today_TodayViewModel2;
     }
 
     private static final class SwitchingProvider<T> implements Provider<T> {
@@ -532,7 +547,10 @@ public final class DaggerDailyCuratorApp_HiltComponents_SingletonC {
           case 2: // com.dailycurator.ui.screens.settings.SettingsViewModel 
           return (T) new SettingsViewModel(singletonCImpl.provideAppPreferencesProvider.get());
 
-          case 3: // com.dailycurator.ui.screens.today.TodayViewModel 
+          case 3: // com.dailycurator.ui.screens.tasks.TasksViewModel 
+          return (T) new TasksViewModel(singletonCImpl.taskRepositoryProvider.get());
+
+          case 4: // com.dailycurator.ui.screens.today.TodayViewModel 
           return (T) new TodayViewModel(singletonCImpl.taskRepositoryProvider.get(), singletonCImpl.goalRepositoryProvider.get());
 
           default: throw new AssertionError(id);

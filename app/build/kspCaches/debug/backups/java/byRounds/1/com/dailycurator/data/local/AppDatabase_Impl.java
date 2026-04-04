@@ -41,14 +41,14 @@ public final class AppDatabase_Impl extends AppDatabase {
   @Override
   @NonNull
   protected SupportSQLiteOpenHelper createOpenHelper(@NonNull final DatabaseConfiguration config) {
-    final SupportSQLiteOpenHelper.Callback _openCallback = new RoomOpenHelper(config, new RoomOpenHelper.Delegate(1) {
+    final SupportSQLiteOpenHelper.Callback _openCallback = new RoomOpenHelper(config, new RoomOpenHelper.Delegate(2) {
       @Override
       public void createAllTables(@NonNull final SupportSQLiteDatabase db) {
         db.execSQL("CREATE TABLE IF NOT EXISTS `tasks` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `rank` INTEGER NOT NULL, `title` TEXT NOT NULL, `startTime` TEXT NOT NULL, `endTime` TEXT NOT NULL, `dueInfo` TEXT, `statusNote` TEXT, `urgency` TEXT NOT NULL, `isDone` INTEGER NOT NULL, `date` TEXT NOT NULL, `tags` TEXT NOT NULL, `location` TEXT, `isProtected` INTEGER NOT NULL)");
-        db.execSQL("CREATE TABLE IF NOT EXISTS `habits` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `category` TEXT NOT NULL, `habitType` TEXT NOT NULL, `iconEmoji` TEXT NOT NULL, `currentValue` REAL NOT NULL, `targetValue` REAL NOT NULL, `unit` TEXT NOT NULL, `streakDays` INTEGER NOT NULL, `date` TEXT NOT NULL)");
-        db.execSQL("CREATE TABLE IF NOT EXISTS `goals` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `isCompleted` INTEGER NOT NULL, `weekStart` TEXT NOT NULL)");
+        db.execSQL("CREATE TABLE IF NOT EXISTS `habits` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `category` TEXT NOT NULL, `habitType` TEXT NOT NULL, `iconEmoji` TEXT NOT NULL, `currentValue` REAL NOT NULL, `targetValue` REAL NOT NULL, `unit` TEXT NOT NULL, `streakDays` INTEGER NOT NULL, `date` TEXT NOT NULL, `isDone` INTEGER NOT NULL, `doneNote` TEXT)");
+        db.execSQL("CREATE TABLE IF NOT EXISTS `goals` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `description` TEXT, `deadline` TEXT, `timeEstimate` TEXT, `category` TEXT NOT NULL, `isCompleted` INTEGER NOT NULL, `weekStart` TEXT NOT NULL)");
         db.execSQL("CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)");
-        db.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '8eaaca1eb2f0775e5601bd2506f403c4')");
+        db.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'af9bde7d1fa8da7080433b951e5daf6e')");
       }
 
       @Override
@@ -122,7 +122,7 @@ public final class AppDatabase_Impl extends AppDatabase {
                   + " Expected:\n" + _infoTasks + "\n"
                   + " Found:\n" + _existingTasks);
         }
-        final HashMap<String, TableInfo.Column> _columnsHabits = new HashMap<String, TableInfo.Column>(10);
+        final HashMap<String, TableInfo.Column> _columnsHabits = new HashMap<String, TableInfo.Column>(12);
         _columnsHabits.put("id", new TableInfo.Column("id", "INTEGER", true, 1, null, TableInfo.CREATED_FROM_ENTITY));
         _columnsHabits.put("name", new TableInfo.Column("name", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
         _columnsHabits.put("category", new TableInfo.Column("category", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
@@ -133,6 +133,8 @@ public final class AppDatabase_Impl extends AppDatabase {
         _columnsHabits.put("unit", new TableInfo.Column("unit", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
         _columnsHabits.put("streakDays", new TableInfo.Column("streakDays", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
         _columnsHabits.put("date", new TableInfo.Column("date", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsHabits.put("isDone", new TableInfo.Column("isDone", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsHabits.put("doneNote", new TableInfo.Column("doneNote", "TEXT", false, 0, null, TableInfo.CREATED_FROM_ENTITY));
         final HashSet<TableInfo.ForeignKey> _foreignKeysHabits = new HashSet<TableInfo.ForeignKey>(0);
         final HashSet<TableInfo.Index> _indicesHabits = new HashSet<TableInfo.Index>(0);
         final TableInfo _infoHabits = new TableInfo("habits", _columnsHabits, _foreignKeysHabits, _indicesHabits);
@@ -142,9 +144,13 @@ public final class AppDatabase_Impl extends AppDatabase {
                   + " Expected:\n" + _infoHabits + "\n"
                   + " Found:\n" + _existingHabits);
         }
-        final HashMap<String, TableInfo.Column> _columnsGoals = new HashMap<String, TableInfo.Column>(4);
+        final HashMap<String, TableInfo.Column> _columnsGoals = new HashMap<String, TableInfo.Column>(8);
         _columnsGoals.put("id", new TableInfo.Column("id", "INTEGER", true, 1, null, TableInfo.CREATED_FROM_ENTITY));
         _columnsGoals.put("title", new TableInfo.Column("title", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsGoals.put("description", new TableInfo.Column("description", "TEXT", false, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsGoals.put("deadline", new TableInfo.Column("deadline", "TEXT", false, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsGoals.put("timeEstimate", new TableInfo.Column("timeEstimate", "TEXT", false, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsGoals.put("category", new TableInfo.Column("category", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
         _columnsGoals.put("isCompleted", new TableInfo.Column("isCompleted", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
         _columnsGoals.put("weekStart", new TableInfo.Column("weekStart", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
         final HashSet<TableInfo.ForeignKey> _foreignKeysGoals = new HashSet<TableInfo.ForeignKey>(0);
@@ -158,7 +164,7 @@ public final class AppDatabase_Impl extends AppDatabase {
         }
         return new RoomOpenHelper.ValidationResult(true, null);
       }
-    }, "8eaaca1eb2f0775e5601bd2506f403c4", "8282151bb556061ea32db9ef1bbb45ea");
+    }, "af9bde7d1fa8da7080433b951e5daf6e", "1a4acd11bcb33f5023b67d54be0c9985");
     final SupportSQLiteOpenHelper.Configuration _sqliteConfig = SupportSQLiteOpenHelper.Configuration.builder(config.context).name(config.name).callback(_openCallback).build();
     final SupportSQLiteOpenHelper _helper = config.sqliteOpenHelperFactory.create(_sqliteConfig);
     return _helper;

@@ -43,12 +43,25 @@ fun GoalListItem(goal: WeeklyGoal, onToggle: () -> Unit, modifier: Modifier = Mo
             }
         }
         Spacer(Modifier.width(12.dp))
-        Text(
-            goal.title,
-            style = MaterialTheme.typography.bodyLarge.copy(
-                color = if (goal.isCompleted) TextPrimary else TextTertiary,
-                fontWeight = if (goal.isCompleted) FontWeight.Medium else FontWeight.Normal
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                goal.title,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    color = if (goal.isCompleted) TextPrimary else TextTertiary,
+                    fontWeight = if (goal.isCompleted) FontWeight.Medium else FontWeight.Normal
+                )
             )
-        )
+            val info = buildString {
+                if (goal.category.isNotEmpty()) append(goal.category)
+                if (goal.deadline != null) append(" • Due ${goal.deadline}")
+                if (goal.timeEstimate != null) append(" • ${goal.timeEstimate}")
+            }
+            if (info.isNotBlank()) {
+                Text(
+                    info,
+                    style = MaterialTheme.typography.labelSmall.copy(color = TextTertiary)
+                )
+            }
+        }
     }
 }

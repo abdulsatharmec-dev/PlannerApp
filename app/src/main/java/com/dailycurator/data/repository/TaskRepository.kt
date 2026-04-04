@@ -37,7 +37,25 @@ class TaskRepository @Inject constructor(private val dao: TaskDao) {
     suspend fun toggleDone(task: PriorityTask) = dao.setDone(task.id, !task.isDone)
 
     suspend fun insert(task: PriorityTask) = dao.insert(
-        TaskEntity(rank = task.rank, title = task.title,
+        TaskEntity(id = task.id, rank = task.rank, title = task.title,
+            startTime = task.startTime.format(TIME_FMT),
+            endTime = task.endTime.format(TIME_FMT),
+            dueInfo = task.dueInfo, statusNote = task.statusNote,
+            urgency = task.urgency.name, isDone = task.isDone,
+            date = task.date.format(DATE_FMT))
+    )
+
+    suspend fun update(task: PriorityTask) = dao.update(
+        TaskEntity(id = task.id, rank = task.rank, title = task.title,
+            startTime = task.startTime.format(TIME_FMT),
+            endTime = task.endTime.format(TIME_FMT),
+            dueInfo = task.dueInfo, statusNote = task.statusNote,
+            urgency = task.urgency.name, isDone = task.isDone,
+            date = task.date.format(DATE_FMT))
+    )
+
+    suspend fun delete(task: PriorityTask) = dao.delete(
+        TaskEntity(id = task.id, rank = task.rank, title = task.title,
             startTime = task.startTime.format(TIME_FMT),
             endTime = task.endTime.format(TIME_FMT),
             dueInfo = task.dueInfo, statusNote = task.statusNote,

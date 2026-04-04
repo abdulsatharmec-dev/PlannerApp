@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -28,8 +29,8 @@ fun GoalsScreen(viewModel: GoalsViewModel = hiltViewModel()) {
     if (showAddGoal) {
         AddGoalDialog(
             onDismiss = { showAddGoal = false },
-            onConfirm = { title ->
-                viewModel.addGoal(title)
+            onConfirm = { title, description, deadline, time, category ->
+                viewModel.addGoal(title, description, deadline, time, category)
                 showAddGoal = false
             }
         )
@@ -71,6 +72,12 @@ fun GoalsScreen(viewModel: GoalsViewModel = hiltViewModel()) {
                             color = Color.White, fontWeight = FontWeight.SemiBold))
                 }
             }
+        }
+        
+        // Calendar View Integration
+        item {
+            GoalsCalendarView(goals = state.pendingGoals + state.completedGoals)
+            Spacer(Modifier.height(16.dp))
         }
 
         // Progress overview card
@@ -164,40 +171,118 @@ fun GoalsScreen(viewModel: GoalsViewModel = hiltViewModel()) {
     }
 }
 
-// ── Add Goal Dialog ────────────────────────────────────────────────────────
-
 @Composable
-private fun AddGoalDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
-    var text by remember { mutableStateOf("") }
+private fun AddGoalDialog(onDismiss: () -> Unit, onConfirm: (String, String?, String?, String?, String) -> Unit) {
+    var title by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var deadline by remember { mutableStateOf("") }
+    var timeEstimate by remember { mutableStateOf("") }
+    var category by remember { mutableStateOf("Spiritual") }
     var isError by remember { mutableStateOf(false) }
+
+    val categories = listOf("Spiritual", "Health", "Finance", "Career", "Learning")
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
         title = {
-            Text("New Weekly Goal",
+            Text("New Goal",
                 style = MaterialTheme.typography.titleLarge.copy(
                     color = MaterialTheme.colorScheme.onSurface))
         },
         text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it; isError = false },
-                label = { Text("Goal title") },
-                isError = isError,
-                supportingText = { if (isError) Text("Title is required") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = title, onValueChange = { title = it; isError = false },
+                    label = { Text("Goal title") }, isError = isError,
+                    singleLine = true, modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = description, onValueChange = { description = it },
+                    label = { Text("Description (Optional)") }, modifier = Modifier.fillMaxWidth()
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = deadline, onValueChange = { deadline = it },
+                        label = { Text("Deadline (e.g. Fri)") }, modifier = Modifier.weight(1f)
+                    )
+                    OutlinedTextField(
+                        value = timeEstimate, onValueChange = { timeEstimate = it },
+                        label = { Text("Time (e.g. 2h)") }, modifier = Modifier.weight(1f)
+                    )
+                }
+                Text("Category", style = MaterialTheme.typography.labelSmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    categories.take(3).forEach { cat ->
+                        FilterChip(
+                            selected = category == cat, onClick = { category = cat },
+                            label = { Text(cat) }
+                        )
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    categories.takeLast(2).forEach { cat ->
+                        FilterChip(
+                            selected = category == cat, onClick = { category = cat },
+                            label = { Text(cat) }
+                        )
+                    }
+                }
+            }
         },
         confirmButton = {
             Button(onClick = {
-                if (text.isBlank()) { isError = true; return@Button }
-                onConfirm(text.trim())
-            }) { Text("Add Goal") }
+                if (title.isBlank()) { isError = true; return@Button }
+                onConfirm(title.trim(), description.takeIf { it.isNotBlank() }, deadline.takeIf { it.isNotBlank() }, timeEstimate.takeIf { it.isNotBlank() }, category)
+            }) { Text("Add") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
+}
+
+@Composable
+private fun GoalsCalendarView(goals: List<com.dailycurator.data.model.WeeklyGoal>) {
+    val days = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Deadlines Calendar", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                days.forEach { day ->
+                    val hasDeadline = goals.any { it.deadline?.contains(day, ignoreCase = true) == true }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(day.take(1), style = MaterialTheme.typography.labelSmall)
+                        Spacer(Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(if (hasDeadline) AccentGreen.copy(alpha = 0.2f) else MaterialTheme.colorScheme.background),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (hasDeadline) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(androidx.compose.foundation.shape.CircleShape)
+                                        .background(AccentGreen)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

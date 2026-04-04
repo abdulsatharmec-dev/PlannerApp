@@ -18,6 +18,10 @@ class GoalRepository @Inject constructor(private val dao: GoalDao) {
         dao.getGoalsForWeek(weekStart.format(DATE_FMT)).map { list ->
             list.map { e ->
                 WeeklyGoal(id = e.id, title = e.title,
+                    description = e.description,
+                    deadline = e.deadline,
+                    timeEstimate = e.timeEstimate,
+                    category = e.category,
                     isCompleted = e.isCompleted,
                     weekStart = LocalDate.parse(e.weekStart, DATE_FMT))
             }
@@ -26,7 +30,23 @@ class GoalRepository @Inject constructor(private val dao: GoalDao) {
     suspend fun toggleCompleted(goal: WeeklyGoal) = dao.setCompleted(goal.id, !goal.isCompleted)
 
     suspend fun insert(goal: WeeklyGoal) = dao.insert(
-        GoalEntity(title = goal.title, isCompleted = goal.isCompleted,
+        GoalEntity(id = goal.id, title = goal.title, description = goal.description,
+            deadline = goal.deadline, timeEstimate = goal.timeEstimate,
+            category = goal.category, isCompleted = goal.isCompleted,
+            weekStart = goal.weekStart.format(DATE_FMT))
+    )
+
+    suspend fun update(goal: WeeklyGoal) = dao.update(
+        GoalEntity(id = goal.id, title = goal.title, description = goal.description,
+            deadline = goal.deadline, timeEstimate = goal.timeEstimate,
+            category = goal.category, isCompleted = goal.isCompleted,
+            weekStart = goal.weekStart.format(DATE_FMT))
+    )
+
+    suspend fun delete(goal: WeeklyGoal) = dao.delete(
+        GoalEntity(id = goal.id, title = goal.title, description = goal.description,
+            deadline = goal.deadline, timeEstimate = goal.timeEstimate,
+            category = goal.category, isCompleted = goal.isCompleted,
             weekStart = goal.weekStart.format(DATE_FMT))
     )
 }

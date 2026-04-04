@@ -44,7 +44,7 @@ public final class HabitDao_Impl implements HabitDao {
       @Override
       @NonNull
       protected String createQuery() {
-        return "INSERT OR REPLACE INTO `habits` (`id`,`name`,`category`,`habitType`,`iconEmoji`,`currentValue`,`targetValue`,`unit`,`streakDays`,`date`) VALUES (nullif(?, 0),?,?,?,?,?,?,?,?,?)";
+        return "INSERT OR REPLACE INTO `habits` (`id`,`name`,`category`,`habitType`,`iconEmoji`,`currentValue`,`targetValue`,`unit`,`streakDays`,`date`,`isDone`,`doneNote`) VALUES (nullif(?, 0),?,?,?,?,?,?,?,?,?,?,?)";
       }
 
       @Override
@@ -60,6 +60,13 @@ public final class HabitDao_Impl implements HabitDao {
         statement.bindString(8, entity.getUnit());
         statement.bindLong(9, entity.getStreakDays());
         statement.bindString(10, entity.getDate());
+        final int _tmp = entity.isDone() ? 1 : 0;
+        statement.bindLong(11, _tmp);
+        if (entity.getDoneNote() == null) {
+          statement.bindNull(12);
+        } else {
+          statement.bindString(12, entity.getDoneNote());
+        }
       }
     };
     this.__deletionAdapterOfHabitEntity = new EntityDeletionOrUpdateAdapter<HabitEntity>(__db) {
@@ -79,7 +86,7 @@ public final class HabitDao_Impl implements HabitDao {
       @Override
       @NonNull
       protected String createQuery() {
-        return "UPDATE OR ABORT `habits` SET `id` = ?,`name` = ?,`category` = ?,`habitType` = ?,`iconEmoji` = ?,`currentValue` = ?,`targetValue` = ?,`unit` = ?,`streakDays` = ?,`date` = ? WHERE `id` = ?";
+        return "UPDATE OR ABORT `habits` SET `id` = ?,`name` = ?,`category` = ?,`habitType` = ?,`iconEmoji` = ?,`currentValue` = ?,`targetValue` = ?,`unit` = ?,`streakDays` = ?,`date` = ?,`isDone` = ?,`doneNote` = ? WHERE `id` = ?";
       }
 
       @Override
@@ -95,7 +102,14 @@ public final class HabitDao_Impl implements HabitDao {
         statement.bindString(8, entity.getUnit());
         statement.bindLong(9, entity.getStreakDays());
         statement.bindString(10, entity.getDate());
-        statement.bindLong(11, entity.getId());
+        final int _tmp = entity.isDone() ? 1 : 0;
+        statement.bindLong(11, _tmp);
+        if (entity.getDoneNote() == null) {
+          statement.bindNull(12);
+        } else {
+          statement.bindString(12, entity.getDoneNote());
+        }
+        statement.bindLong(13, entity.getId());
       }
     };
   }
@@ -176,6 +190,8 @@ public final class HabitDao_Impl implements HabitDao {
           final int _cursorIndexOfUnit = CursorUtil.getColumnIndexOrThrow(_cursor, "unit");
           final int _cursorIndexOfStreakDays = CursorUtil.getColumnIndexOrThrow(_cursor, "streakDays");
           final int _cursorIndexOfDate = CursorUtil.getColumnIndexOrThrow(_cursor, "date");
+          final int _cursorIndexOfIsDone = CursorUtil.getColumnIndexOrThrow(_cursor, "isDone");
+          final int _cursorIndexOfDoneNote = CursorUtil.getColumnIndexOrThrow(_cursor, "doneNote");
           final List<HabitEntity> _result = new ArrayList<HabitEntity>(_cursor.getCount());
           while (_cursor.moveToNext()) {
             final HabitEntity _item;
@@ -199,7 +215,17 @@ public final class HabitDao_Impl implements HabitDao {
             _tmpStreakDays = _cursor.getInt(_cursorIndexOfStreakDays);
             final String _tmpDate;
             _tmpDate = _cursor.getString(_cursorIndexOfDate);
-            _item = new HabitEntity(_tmpId,_tmpName,_tmpCategory,_tmpHabitType,_tmpIconEmoji,_tmpCurrentValue,_tmpTargetValue,_tmpUnit,_tmpStreakDays,_tmpDate);
+            final boolean _tmpIsDone;
+            final int _tmp;
+            _tmp = _cursor.getInt(_cursorIndexOfIsDone);
+            _tmpIsDone = _tmp != 0;
+            final String _tmpDoneNote;
+            if (_cursor.isNull(_cursorIndexOfDoneNote)) {
+              _tmpDoneNote = null;
+            } else {
+              _tmpDoneNote = _cursor.getString(_cursorIndexOfDoneNote);
+            }
+            _item = new HabitEntity(_tmpId,_tmpName,_tmpCategory,_tmpHabitType,_tmpIconEmoji,_tmpCurrentValue,_tmpTargetValue,_tmpUnit,_tmpStreakDays,_tmpDate,_tmpIsDone,_tmpDoneNote);
             _result.add(_item);
           }
           return _result;

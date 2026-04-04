@@ -47,7 +47,7 @@ public final class GoalDao_Impl implements GoalDao {
       @Override
       @NonNull
       protected String createQuery() {
-        return "INSERT OR REPLACE INTO `goals` (`id`,`title`,`isCompleted`,`weekStart`) VALUES (nullif(?, 0),?,?,?)";
+        return "INSERT OR REPLACE INTO `goals` (`id`,`title`,`description`,`deadline`,`timeEstimate`,`category`,`isCompleted`,`weekStart`) VALUES (nullif(?, 0),?,?,?,?,?,?,?)";
       }
 
       @Override
@@ -55,9 +55,25 @@ public final class GoalDao_Impl implements GoalDao {
           @NonNull final GoalEntity entity) {
         statement.bindLong(1, entity.getId());
         statement.bindString(2, entity.getTitle());
+        if (entity.getDescription() == null) {
+          statement.bindNull(3);
+        } else {
+          statement.bindString(3, entity.getDescription());
+        }
+        if (entity.getDeadline() == null) {
+          statement.bindNull(4);
+        } else {
+          statement.bindString(4, entity.getDeadline());
+        }
+        if (entity.getTimeEstimate() == null) {
+          statement.bindNull(5);
+        } else {
+          statement.bindString(5, entity.getTimeEstimate());
+        }
+        statement.bindString(6, entity.getCategory());
         final int _tmp = entity.isCompleted() ? 1 : 0;
-        statement.bindLong(3, _tmp);
-        statement.bindString(4, entity.getWeekStart());
+        statement.bindLong(7, _tmp);
+        statement.bindString(8, entity.getWeekStart());
       }
     };
     this.__deletionAdapterOfGoalEntity = new EntityDeletionOrUpdateAdapter<GoalEntity>(__db) {
@@ -77,7 +93,7 @@ public final class GoalDao_Impl implements GoalDao {
       @Override
       @NonNull
       protected String createQuery() {
-        return "UPDATE OR ABORT `goals` SET `id` = ?,`title` = ?,`isCompleted` = ?,`weekStart` = ? WHERE `id` = ?";
+        return "UPDATE OR ABORT `goals` SET `id` = ?,`title` = ?,`description` = ?,`deadline` = ?,`timeEstimate` = ?,`category` = ?,`isCompleted` = ?,`weekStart` = ? WHERE `id` = ?";
       }
 
       @Override
@@ -85,10 +101,26 @@ public final class GoalDao_Impl implements GoalDao {
           @NonNull final GoalEntity entity) {
         statement.bindLong(1, entity.getId());
         statement.bindString(2, entity.getTitle());
+        if (entity.getDescription() == null) {
+          statement.bindNull(3);
+        } else {
+          statement.bindString(3, entity.getDescription());
+        }
+        if (entity.getDeadline() == null) {
+          statement.bindNull(4);
+        } else {
+          statement.bindString(4, entity.getDeadline());
+        }
+        if (entity.getTimeEstimate() == null) {
+          statement.bindNull(5);
+        } else {
+          statement.bindString(5, entity.getTimeEstimate());
+        }
+        statement.bindString(6, entity.getCategory());
         final int _tmp = entity.isCompleted() ? 1 : 0;
-        statement.bindLong(3, _tmp);
-        statement.bindString(4, entity.getWeekStart());
-        statement.bindLong(5, entity.getId());
+        statement.bindLong(7, _tmp);
+        statement.bindString(8, entity.getWeekStart());
+        statement.bindLong(9, entity.getId());
       }
     };
     this.__preparedStmtOfSetCompleted = new SharedSQLiteStatement(__db) {
@@ -198,6 +230,10 @@ public final class GoalDao_Impl implements GoalDao {
         try {
           final int _cursorIndexOfId = CursorUtil.getColumnIndexOrThrow(_cursor, "id");
           final int _cursorIndexOfTitle = CursorUtil.getColumnIndexOrThrow(_cursor, "title");
+          final int _cursorIndexOfDescription = CursorUtil.getColumnIndexOrThrow(_cursor, "description");
+          final int _cursorIndexOfDeadline = CursorUtil.getColumnIndexOrThrow(_cursor, "deadline");
+          final int _cursorIndexOfTimeEstimate = CursorUtil.getColumnIndexOrThrow(_cursor, "timeEstimate");
+          final int _cursorIndexOfCategory = CursorUtil.getColumnIndexOrThrow(_cursor, "category");
           final int _cursorIndexOfIsCompleted = CursorUtil.getColumnIndexOrThrow(_cursor, "isCompleted");
           final int _cursorIndexOfWeekStart = CursorUtil.getColumnIndexOrThrow(_cursor, "weekStart");
           final List<GoalEntity> _result = new ArrayList<GoalEntity>(_cursor.getCount());
@@ -207,13 +243,33 @@ public final class GoalDao_Impl implements GoalDao {
             _tmpId = _cursor.getLong(_cursorIndexOfId);
             final String _tmpTitle;
             _tmpTitle = _cursor.getString(_cursorIndexOfTitle);
+            final String _tmpDescription;
+            if (_cursor.isNull(_cursorIndexOfDescription)) {
+              _tmpDescription = null;
+            } else {
+              _tmpDescription = _cursor.getString(_cursorIndexOfDescription);
+            }
+            final String _tmpDeadline;
+            if (_cursor.isNull(_cursorIndexOfDeadline)) {
+              _tmpDeadline = null;
+            } else {
+              _tmpDeadline = _cursor.getString(_cursorIndexOfDeadline);
+            }
+            final String _tmpTimeEstimate;
+            if (_cursor.isNull(_cursorIndexOfTimeEstimate)) {
+              _tmpTimeEstimate = null;
+            } else {
+              _tmpTimeEstimate = _cursor.getString(_cursorIndexOfTimeEstimate);
+            }
+            final String _tmpCategory;
+            _tmpCategory = _cursor.getString(_cursorIndexOfCategory);
             final boolean _tmpIsCompleted;
             final int _tmp;
             _tmp = _cursor.getInt(_cursorIndexOfIsCompleted);
             _tmpIsCompleted = _tmp != 0;
             final String _tmpWeekStart;
             _tmpWeekStart = _cursor.getString(_cursorIndexOfWeekStart);
-            _item = new GoalEntity(_tmpId,_tmpTitle,_tmpIsCompleted,_tmpWeekStart);
+            _item = new GoalEntity(_tmpId,_tmpTitle,_tmpDescription,_tmpDeadline,_tmpTimeEstimate,_tmpCategory,_tmpIsCompleted,_tmpWeekStart);
             _result.add(_item);
           }
           return _result;

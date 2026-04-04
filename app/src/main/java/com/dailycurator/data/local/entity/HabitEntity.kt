@@ -14,5 +14,7 @@ data class HabitEntity(
     val targetValue: Float,
     val unit: String,
     val streakDays: Int = 0,
-    val date: String
+    val date: String,
+    val isDone: Boolean = false,
+    val doneNote: String? = null
 )

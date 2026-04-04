@@ -14,7 +14,8 @@ import javax.inject.Inject
 
 data class HabitsUiState(
     val buildingHabits: List<Habit> = emptyList(),
-    val eliminatingHabits: List<Habit> = emptyList()
+    val eliminatingHabits: List<Habit> = emptyList(),
+    val showCompleted: Boolean = false
 )
 
 @HiltViewModel
@@ -22,13 +23,27 @@ class HabitsViewModel @Inject constructor(
     private val repo: HabitRepository
 ) : ViewModel() {
 
-    val uiState: StateFlow<HabitsUiState> =
-        repo.getHabitsForDate(LocalDate.now()).map { habits ->
-            HabitsUiState(
-                buildingHabits = habits.filter { it.habitType == HabitType.BUILDING },
-                eliminatingHabits = habits.filter { it.habitType == HabitType.ELIMINATING }
-            )
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HabitsUiState())
+    private val _showCompleted = MutableStateFlow(false)
+
+    val uiState: StateFlow<HabitsUiState> = combine(
+        repo.getHabitsForDate(LocalDate.now()),
+        _showCompleted
+    ) { habits, showCompleted ->
+        val filtered = if (showCompleted) habits else habits.filter { !it.isDone }
+        HabitsUiState(
+            buildingHabits = filtered.filter { it.habitType == HabitType.BUILDING },
+            eliminatingHabits = filtered.filter { it.habitType == HabitType.ELIMINATING },
+            showCompleted = showCompleted
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HabitsUiState())
+
+    fun toggleShowCompleted() {
+        _showCompleted.value = !_showCompleted.value
+    }
+
+    fun markHabitDone(habit: Habit, note: String?) = viewModelScope.launch {
+        repo.markHabitDone(habit, note)
+    }
 
     fun addHabit(
         name: String,

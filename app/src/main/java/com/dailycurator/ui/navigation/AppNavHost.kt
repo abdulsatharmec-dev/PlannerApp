@@ -13,6 +13,7 @@ import androidx.navigation.compose.rememberNavController
 import com.dailycurator.ui.screens.goals.GoalsScreen
 import com.dailycurator.ui.screens.habits.HabitsScreen
 import com.dailycurator.ui.screens.settings.SettingsScreen
+import com.dailycurator.ui.screens.tasks.TasksScreen
 import com.dailycurator.ui.screens.today.TodayScreen
 import com.dailycurator.ui.theme.Background
 import com.dailycurator.ui.theme.Primary
@@ -56,6 +57,7 @@ fun AppNavHost() {
         NavHost(navController = navController, startDestination = Screen.Today.route,
             modifier = Modifier.padding(innerPadding)) {
             composable(Screen.Today.route)    { TodayScreen() }
+            composable(Screen.Tasks.route)    { TasksScreen() }
             composable(Screen.Habits.route)   { HabitsScreen() }
             composable(Screen.Goals.route)    { GoalsScreen() }
             composable(Screen.Settings.route) { SettingsScreen() }

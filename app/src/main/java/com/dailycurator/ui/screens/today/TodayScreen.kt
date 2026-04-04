@@ -32,17 +32,6 @@ import java.time.format.DateTimeFormatter
 fun TodayScreen(viewModel: TodayViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsState()
     val todayLabel = LocalDate.now().format(DateTimeFormatter.ofPattern("MMM d"))
-    var showAddTask by remember { mutableStateOf(false) }
-
-    if (showAddTask) {
-        AddTaskDialog(
-            onDismiss = { showAddTask = false },
-            onConfirm = { title, start, end, urgency ->
-                viewModel.addTask(title, start, end, urgency)
-                showAddTask = false
-            }
-        )
-    }
 
     LazyColumn(
         modifier = Modifier
@@ -106,25 +95,7 @@ fun TodayScreen(viewModel: TodayViewModel = hiltViewModel()) {
             Spacer(Modifier.height(8.dp))
         }
 
-        // ── New Task button
-        item {
-            Spacer(Modifier.height(4.dp))
-            Button(
-                onClick = { showAddTask = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .height(52.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
-                Spacer(Modifier.width(6.dp))
-                Text("New Task",
-                    style = MaterialTheme.typography.titleMedium.copy(color = Color.White))
-            }
-            Spacer(Modifier.height(24.dp))
-        }
+
 
         // ── Weekly Goals section
         item {
@@ -151,98 +122,6 @@ fun TodayScreen(viewModel: TodayViewModel = hiltViewModel()) {
     }
 }
 
-// ── Add Task Dialog ────────────────────────────────────────────────────────
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun AddTaskDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (String, LocalTime, LocalTime, Urgency) -> Unit
-) {
-    var title     by remember { mutableStateOf("") }
-    var startText by remember { mutableStateOf("09:00") }
-    var endText   by remember { mutableStateOf("10:00") }
-    var urgency   by remember { mutableStateOf(Urgency.GREEN) }
-    var titleError by remember { mutableStateOf(false) }
-
-    val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
-        title = {
-            Text("New Task",
-                style = MaterialTheme.typography.titleLarge.copy(
-                    color = MaterialTheme.colorScheme.onSurface))
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it; titleError = false },
-                    label = { Text("Task title") },
-                    isError = titleError,
-                    supportingText = { if (titleError) Text("Title is required") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = startText,
-                        onValueChange = { startText = it },
-                        label = { Text("Start (HH:mm)") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                    OutlinedTextField(
-                        value = endText,
-                        onValueChange = { endText = it },
-                        label = { Text("End (HH:mm)") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                // Urgency chips
-                Text("Priority", style = MaterialTheme.typography.labelMedium.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Urgency.values().forEach { u ->
-                        val label = when (u) {
-                            Urgency.GREEN   -> "Normal"
-                            Urgency.RED     -> "High"
-                            Urgency.NEUTRAL -> "Low"
-                        }
-                        val chipColor = when (u) {
-                            Urgency.GREEN   -> AccentGreen
-                            Urgency.RED     -> AccentRed
-                            Urgency.NEUTRAL -> MaterialTheme.colorScheme.outline
-                        }
-                        FilterChip(
-                            selected = urgency == u,
-                            onClick = { urgency = u },
-                            label = { Text(label) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = chipColor.copy(alpha = 0.15f),
-                                selectedLabelColor = chipColor
-                            )
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(onClick = {
-                if (title.isBlank()) { titleError = true; return@Button }
-                val start = runCatching { LocalTime.parse(startText, timeFmt) }.getOrElse { LocalTime.of(9, 0) }
-                val end   = runCatching { LocalTime.parse(endText, timeFmt) }.getOrElse { start.plusHours(1) }
-                onConfirm(title.trim(), start, end, urgency)
-            }) { Text("Save") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
-    )
-}
 
 // ── Weekly Goals Section ───────────────────────────────────────────────────
 

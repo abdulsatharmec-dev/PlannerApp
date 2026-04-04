@@ -24,10 +24,13 @@ import com.dailycurator.data.model.HabitType
 import com.dailycurator.ui.components.HabitCard
 import com.dailycurator.ui.theme.*
 
+import com.dailycurator.data.model.Habit
+
 @Composable
 fun HabitsScreen(viewModel: HabitsViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsState()
     var showAddHabit by remember { mutableStateOf(false) }
+    var habitToMarkDone by remember { mutableStateOf<Habit?>(null) }
 
     if (showAddHabit) {
         AddHabitDialog(
@@ -35,6 +38,17 @@ fun HabitsScreen(viewModel: HabitsViewModel = hiltViewModel()) {
             onConfirm = { name, category, type, emoji, target, unit ->
                 viewModel.addHabit(name, category, type, emoji, target, unit)
                 showAddHabit = false
+            }
+        )
+    }
+
+    if (habitToMarkDone != null) {
+        MarkHabitDoneDialog(
+            habit = habitToMarkDone!!,
+            onDismiss = { habitToMarkDone = null },
+            onConfirm = { note ->
+                viewModel.markHabitDone(habitToMarkDone!!, note.takeIf { it.isNotBlank() })
+                habitToMarkDone = null
             }
         )
     }
@@ -107,6 +121,22 @@ fun HabitsScreen(viewModel: HabitsViewModel = hiltViewModel()) {
                 }
             }
             Spacer(Modifier.height(16.dp))
+
+            // Toggle show completed
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Show completed habits", style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant))
+                Switch(
+                    checked = state.showCompleted,
+                    onCheckedChange = { viewModel.toggleShowCompleted() }
+                )
+            }
+            Spacer(Modifier.height(8.dp))
         }
 
         // AI Habit Extractor card
@@ -163,7 +193,8 @@ fun HabitsScreen(viewModel: HabitsViewModel = hiltViewModel()) {
         items(state.buildingHabits, key = { it.id }) { habit ->
             HabitCard(
                 habit = habit,
-                modifier = Modifier.padding(horizontal = 20.dp)
+                modifier = Modifier.padding(horizontal = 20.dp),
+                onMarkDoneClick = { habitToMarkDone = habit }
             )
             Spacer(Modifier.height(12.dp))
         }
@@ -181,11 +212,43 @@ fun HabitsScreen(viewModel: HabitsViewModel = hiltViewModel()) {
         items(state.eliminatingHabits, key = { it.id }) { habit ->
             HabitCard(
                 habit = habit,
-                modifier = Modifier.padding(horizontal = 20.dp)
+                modifier = Modifier.padding(horizontal = 20.dp),
+                onMarkDoneClick = { habitToMarkDone = habit }
             )
             Spacer(Modifier.height(12.dp))
         }
     }
+}
+
+@Composable
+private fun MarkHabitDoneDialog(
+    habit: Habit,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var note by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Mark '${habit.name}' as Done") },
+        text = {
+            Column {
+                Text("Add an optional note about today's progress:")
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = note,
+                    onValueChange = { note = it },
+                    label = { Text("Note (optional)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onConfirm(note) }) { Text("Mark Done") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
 
 // ── Add Habit Dialog ───────────────────────────────────────────────────────

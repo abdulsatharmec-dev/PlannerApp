@@ -3,6 +3,7 @@ package com.dailycurator;
 import com.dailycurator.di.AppModule;
 import com.dailycurator.ui.screens.goals.GoalsViewModel_HiltModules;
 import com.dailycurator.ui.screens.habits.HabitsViewModel_HiltModules;
+import com.dailycurator.ui.screens.settings.SettingsViewModel_HiltModules;
 import com.dailycurator.ui.screens.today.TodayViewModel_HiltModules;
 import dagger.Binds;
 import dagger.Component;
@@ -161,6 +162,7 @@ public final class DailyCuratorApp_HiltComponents {
           HabitsViewModel_HiltModules.KeyModule.class,
           HiltWrapper_ActivityRetainedComponentManager_LifecycleModule.class,
           HiltWrapper_SavedStateHandleModule.class,
+          SettingsViewModel_HiltModules.KeyModule.class,
           TodayViewModel_HiltModules.KeyModule.class
       }
   )
@@ -200,6 +202,7 @@ public final class DailyCuratorApp_HiltComponents {
           GoalsViewModel_HiltModules.BindsModule.class,
           HabitsViewModel_HiltModules.BindsModule.class,
           HiltWrapper_HiltViewModelFactory_ViewModelModule.class,
+          SettingsViewModel_HiltModules.BindsModule.class,
           TodayViewModel_HiltModules.BindsModule.class
       }
   )
