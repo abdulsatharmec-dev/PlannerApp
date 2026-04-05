@@ -76,7 +76,8 @@ fun PriorityItem(
                                 MaterialTheme.colorScheme.onSurfaceVariant
                             } else {
                                 MaterialTheme.colorScheme.onSurface
-                            }
+                            },
+                            textDecoration = if (task.isDone) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
                         ))
                     Spacer(Modifier.height(2.dp))
                     val subtitle = buildString {

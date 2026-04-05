@@ -8,9 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,6 +22,7 @@ import com.dailycurator.ui.theme.*
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val isDark by viewModel.isDarkTheme.collectAsState()
+    val cerebrasKey by viewModel.cerebrasKey.collectAsState()
 
     LazyColumn(
         modifier = Modifier
@@ -91,6 +90,31 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                             checkedTrackColor = MaterialTheme.colorScheme.primary
                         )
                     )
+                }
+            }
+        }
+        item {
+            Spacer(Modifier.height(16.dp))
+            SettingsGroup(title = "Cerebras API") {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("API Key", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = cerebrasKey,
+                        onValueChange = { viewModel.onCerebrasKeyChange(it) },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Enter your Cerebras key") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = { viewModel.saveCerebrasKey() },
+                        modifier = Modifier.align(Alignment.End),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Save Key")
+                    }
                 }
             }
         }

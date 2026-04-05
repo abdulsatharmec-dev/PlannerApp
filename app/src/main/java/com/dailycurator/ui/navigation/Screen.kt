@@ -1,6 +1,7 @@
 package com.dailycurator.ui.navigation
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
@@ -14,7 +15,8 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
     object Tasks   : Screen("tasks",    "Tasks",    Icons.Default.List)
     object Habits  : Screen("habits",   "Habits",   Icons.Default.TrackChanges)
     object Goals   : Screen("goals",    "Goals",    Icons.Default.CheckCircle)
+    object Chat    : Screen("chat",     "AI Agent", Icons.Default.AutoAwesome)
     object Settings: Screen("settings", "Settings", Icons.Default.Settings)
 }
 
-val bottomNavItems = listOf(Screen.Today, Screen.Tasks, Screen.Habits, Screen.Goals, Screen.Settings)
+val bottomNavItems = listOf(Screen.Today, Screen.Tasks, Screen.Habits, Screen.Goals, Screen.Chat)

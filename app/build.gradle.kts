@@ -1,8 +1,11 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
-    alias(libs.plugins.ksp)
+    id("org.jetbrains.kotlin.kapt")
 }
 
 android {
@@ -31,13 +34,36 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions { jvmTarget = "17" }
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
+        }
+    }
 
     buildFeatures { compose = true }
 
     composeOptions { kotlinCompilerExtensionVersion = "1.5.14" }
 
-    packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
+    lint {
+        // Compose lint in AGP 8.5 cannot parse newer Kotlin metadata used by Koog transitive deps.
+        disable += "FlowOperatorInvokedInComposition"
+        abortOnError = false
+    }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1,INDEX.LIST}"
+            excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+            excludes += "META-INF/io.netty.versions.properties"
+            excludes += "META-INF/DEPENDENCIES"
+            excludes += "META-INF/LICENSE*"
+            excludes += "META-INF/NOTICE*"
+        }
+    }
+}
+
+kapt {
+    correctErrorTypes = true
 }
 
 dependencies {
@@ -54,10 +80,17 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
-    ksp(libs.androidx.room.compiler)
+    kapt(libs.androidx.room.compiler)
     implementation(libs.hilt.android)
-    ksp(libs.hilt.compiler)
+    kapt(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
     implementation(libs.gson)
+    implementation("ai.koog:koog-agents:0.7.1")
+    implementation("ai.koog:agents-core:0.7.1")
+    implementation("ai.koog:prompt-executor-model:0.7.1")
+    implementation("ai.koog:prompt-executor-clients:0.7.1")
+    implementation("ai.koog:prompt-llm:0.7.1")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation(kotlin("test"))
     debugImplementation(libs.androidx.ui.tooling)
 }

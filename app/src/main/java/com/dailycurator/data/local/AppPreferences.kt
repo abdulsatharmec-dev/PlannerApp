@@ -11,7 +11,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val PREFS_NAME  = "curator_prefs"
-private const val KEY_DARK    = "dark_theme"
+private const val KEY_DARK       = "dark_theme"
+private const val KEY_CEREBRAS  = "cerebras_key"
 
 @Singleton
 class AppPreferences @Inject constructor(@ApplicationContext context: Context) {
@@ -33,6 +34,12 @@ class AppPreferences @Inject constructor(@ApplicationContext context: Context) {
     fun setDarkTheme(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_DARK, enabled).apply()
     }
+
+    fun setCerebrasKey(key: String) {
+        prefs.edit().putString(KEY_CEREBRAS, key).apply()
+    }
+
+    fun getCerebrasKey(): String = prefs.getString(KEY_CEREBRAS, "") ?: ""
 
     fun isDarkTheme(): Boolean = prefs.getBoolean(KEY_DARK, false)
 }
