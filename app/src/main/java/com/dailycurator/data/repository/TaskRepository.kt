@@ -35,6 +35,11 @@ class TaskRepository @Inject constructor(private val dao: TaskDao) {
             list.map { it.toPriorityTask() }
         }
 
+    fun getTasksBetween(start: LocalDate, end: LocalDate): Flow<List<PriorityTask>> =
+        dao.getTasksBetween(start.format(DATE_FMT), end.format(DATE_FMT)).map { list ->
+            list.map { it.toPriorityTask() }
+        }
+
     suspend fun getById(id: Long): PriorityTask? = dao.getById(id)?.toPriorityTask()
 
     suspend fun nextRankForDate(date: LocalDate): Int {

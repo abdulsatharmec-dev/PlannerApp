@@ -33,6 +33,14 @@ data class ScheduleEvent(
     val date: LocalDate = LocalDate.now()
 )
 
+data class JournalEntry(
+    val id: Long = 0,
+    val title: String,
+    val body: String,
+    val createdAtEpochMillis: Long,
+    val updatedAtEpochMillis: Long,
+)
+
 data class WeeklyGoal(
     val id: Long = 0,
     val title: String,

@@ -1,6 +1,7 @@
 package com.dailycurator.data.repository
 
 import com.dailycurator.data.ai.InsightType
+import com.dailycurator.data.ai.JournalContextFormatter
 import com.dailycurator.data.local.AppPreferences
 import com.dailycurator.data.local.dao.CachedInsightDao
 import com.dailycurator.data.local.entity.CachedInsightEntity
@@ -26,6 +27,7 @@ class InsightCacheRepository @Inject constructor(
     private val taskRepository: TaskRepository,
     private val habitRepository: HabitRepository,
     private val goalRepository: GoalRepository,
+    private val journalRepository: JournalRepository,
 ) {
 
     private val assistantMutex = Mutex()
@@ -85,7 +87,7 @@ class InsightCacheRepository @Inject constructor(
         val tasks = taskRepository.getTasksForDate(today).first()
         val habits = habitRepository.getHabitsForDate(today).first()
         val goals = goalRepository.getGoalsForWeek(weekStart).first()
-        val ctx = buildAssistantContext(today, tasks, habits, goals)
+        val ctx = buildAssistantContext(today, tasks, habits, goals, includeJournal = prefs.isJournalInAssistantInsight())
         val system = prefs.getAssistantInsightPrompt()
         val content = completeInsightJson(system, ctx)
         val (bold, summary, recovery) = parseInsightJson(content)
@@ -105,7 +107,7 @@ class InsightCacheRepository @Inject constructor(
         val today = LocalDate.now()
         val weekStart = today.minusDays(today.dayOfWeek.value.toLong() - 1)
         val goals = goalRepository.getGoalsForWeek(weekStart).first()
-        val ctx = buildWeeklyGoalsContext(weekStart, goals)
+        val ctx = buildWeeklyGoalsContext(weekStart, goals, includeJournal = prefs.isJournalInWeeklyGoalsInsight())
         val system = prefs.getWeeklyGoalsInsightPrompt()
         val content = completeInsightJson(system, ctx)
         val (bold, summary, recovery) = parseInsightJson(content)
@@ -136,11 +138,12 @@ class InsightCacheRepository @Inject constructor(
             ?: throw CerebrasApiException("Model returned no text")
     }
 
-    private fun buildAssistantContext(
+    private suspend fun buildAssistantContext(
         today: LocalDate,
         tasks: List<com.dailycurator.data.model.PriorityTask>,
         habits: List<com.dailycurator.data.model.Habit>,
         goals: List<com.dailycurator.data.model.WeeklyGoal>,
+        includeJournal: Boolean,
     ): String {
         val fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
         val time = java.time.LocalDateTime.now().format(fmt)
@@ -167,12 +170,19 @@ class InsightCacheRepository @Inject constructor(
                 val st = if (it.isCompleted) "done" else "open"
                 appendLine("- [$st] #${it.id} ${it.title} | ${it.description ?: ""} | deadline=${it.deadline} | est=${it.timeEstimate} | cat=${it.category}")
             }
+            if (includeJournal) {
+                val journal = journalRepository.getRecentForAiContext(30)
+                appendLine()
+                appendLine("--- JOURNAL (recent, user-enabled for assistant insight) ---")
+                appendLine(JournalContextFormatter.format(journal))
+            }
         }
     }
 
-    private fun buildWeeklyGoalsContext(
+    private suspend fun buildWeeklyGoalsContext(
         weekStart: LocalDate,
         goals: List<com.dailycurator.data.model.WeeklyGoal>,
+        includeJournal: Boolean,
     ): String = buildString {
         appendLine("Week starting: $weekStart")
         appendLine("Goals (${goals.size}):")
@@ -182,6 +192,12 @@ class InsightCacheRepository @Inject constructor(
             appendLine("- [$st] #${it.id} ${it.title}")
             it.description?.takeIf { d -> d.isNotBlank() }?.let { d -> appendLine("  description: $d") }
             appendLine("  deadline=${it.deadline} timeEstimate=${it.timeEstimate} category=${it.category}")
+        }
+        if (includeJournal) {
+            val journal = journalRepository.getRecentForAiContext(24)
+            appendLine()
+            appendLine("--- JOURNAL (recent, user-enabled for weekly insight) ---")
+            appendLine(JournalContextFormatter.format(journal))
         }
     }
 }

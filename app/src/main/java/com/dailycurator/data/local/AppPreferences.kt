@@ -21,6 +21,9 @@ private const val KEY_ASSISTANT_INSIGHT_PROMPT = "assistant_insight_prompt"
 private const val KEY_WEEKLY_GOALS_INSIGHT_PROMPT = "weekly_goals_insight_prompt"
 private const val KEY_DAY_WINDOW_START_MIN = "day_window_start_min"
 private const val KEY_DAY_WINDOW_END_MIN = "day_window_end_min"
+private const val KEY_JOURNAL_SHARE_WITH_CHAT = "journal_share_with_chat"
+private const val KEY_JOURNAL_IN_ASSISTANT_INSIGHT = "journal_in_assistant_insight"
+private const val KEY_JOURNAL_IN_WEEKLY_GOALS_INSIGHT = "journal_in_weekly_goals_insight"
 
 /** Minutes from midnight; inclusive schedule / “day” window on the home screen. */
 data class DayWindowMinutes(val startMinute: Int, val endMinute: Int)
@@ -79,6 +82,33 @@ class AppPreferences @Inject constructor(@ApplicationContext context: Context) {
         }
         prefs.registerOnSharedPreferenceChangeListener(listener)
         trySend(getDayWindow())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val journalShareWithChatFlow: Flow<Boolean> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_JOURNAL_SHARE_WITH_CHAT) trySend(isJournalSharedWithChat())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(isJournalSharedWithChat())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val journalInAssistantInsightFlow: Flow<Boolean> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_JOURNAL_IN_ASSISTANT_INSIGHT) trySend(isJournalInAssistantInsight())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(isJournalInAssistantInsight())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val journalInWeeklyGoalsInsightFlow: Flow<Boolean> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_JOURNAL_IN_WEEKLY_GOALS_INSIGHT) trySend(isJournalInWeeklyGoalsInsight())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(isJournalInWeeklyGoalsInsight())
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }.distinctUntilChanged()
 
@@ -170,5 +200,26 @@ class AppPreferences @Inject constructor(@ApplicationContext context: Context) {
             .putInt(KEY_DAY_WINDOW_START_MIN, s)
             .putInt(KEY_DAY_WINDOW_END_MIN, e)
             .apply()
+    }
+
+    fun isJournalSharedWithChat(): Boolean =
+        prefs.getBoolean(KEY_JOURNAL_SHARE_WITH_CHAT, true)
+
+    fun setJournalSharedWithChat(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_JOURNAL_SHARE_WITH_CHAT, enabled).apply()
+    }
+
+    fun isJournalInAssistantInsight(): Boolean =
+        prefs.getBoolean(KEY_JOURNAL_IN_ASSISTANT_INSIGHT, true)
+
+    fun setJournalInAssistantInsight(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_JOURNAL_IN_ASSISTANT_INSIGHT, enabled).apply()
+    }
+
+    fun isJournalInWeeklyGoalsInsight(): Boolean =
+        prefs.getBoolean(KEY_JOURNAL_IN_WEEKLY_GOALS_INSIGHT, true)
+
+    fun setJournalInWeeklyGoalsInsight(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_JOURNAL_IN_WEEKLY_GOALS_INSIGHT, enabled).apply()
     }
 }

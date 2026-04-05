@@ -9,6 +9,11 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE date = :date ORDER BY rank ASC")
     fun getTasksForDate(date: String): Flow<List<TaskEntity>>
 
+    @Query(
+        "SELECT * FROM tasks WHERE date >= :startDate AND date <= :endDate ORDER BY date ASC, rank ASC, startTime ASC",
+    )
+    fun getTasksBetween(startDate: String, endDate: String): Flow<List<TaskEntity>>
+
     @Query("SELECT * FROM tasks WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): TaskEntity?
 

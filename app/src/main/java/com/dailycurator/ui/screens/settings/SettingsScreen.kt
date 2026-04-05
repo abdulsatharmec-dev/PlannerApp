@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LightMode
@@ -70,6 +71,9 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val isDark by viewModel.isDarkTheme.collectAsState()
     val assistantInsightEnabled by viewModel.assistantInsightEnabled.collectAsState()
     val weeklyGoalsInsightEnabled by viewModel.weeklyGoalsInsightEnabled.collectAsState()
+    val journalShareWithChat by viewModel.journalShareWithChat.collectAsState()
+    val journalInAssistantInsight by viewModel.journalInAssistantInsight.collectAsState()
+    val journalInWeeklyGoalsInsight by viewModel.journalInWeeklyGoalsInsight.collectAsState()
     val assistantInsightPrompt by viewModel.assistantInsightPrompt.collectAsState()
     val weeklyGoalsInsightPrompt by viewModel.weeklyGoalsInsightPrompt.collectAsState()
     val cerebrasKey by viewModel.cerebrasKey.collectAsState()
@@ -265,6 +269,34 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                         Text("Save key")
                     }
                 }
+            }
+        }
+
+        item {
+            SettingsSection(title = "Journal & AI") {
+                SettingsToggleRow(
+                    icon = Icons.Default.Book,
+                    label = "Share journal with chat agent",
+                    subtitle = "AI Agent can read recent entries in its context",
+                    checked = journalShareWithChat,
+                    onCheckedChange = { viewModel.setJournalShareWithChat(it) },
+                )
+                HorizontalDivider(Modifier.padding(start = 16.dp))
+                SettingsToggleRow(
+                    icon = null,
+                    label = "Journal in assistant insight",
+                    subtitle = "Home “Assistant insight” may use recent entries",
+                    checked = journalInAssistantInsight,
+                    onCheckedChange = { viewModel.setJournalInAssistantInsight(it) },
+                )
+                HorizontalDivider(Modifier.padding(start = 16.dp))
+                SettingsToggleRow(
+                    icon = null,
+                    label = "Journal in weekly goals insight",
+                    subtitle = "Weekly goals coaching may use recent entries",
+                    checked = journalInWeeklyGoalsInsight,
+                    onCheckedChange = { viewModel.setJournalInWeeklyGoalsInsight(it) },
+                )
             }
         }
 

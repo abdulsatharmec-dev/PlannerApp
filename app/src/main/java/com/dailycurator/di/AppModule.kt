@@ -7,6 +7,7 @@ import com.dailycurator.data.local.dao.CachedInsightDao
 import com.dailycurator.data.local.dao.ChatMessageDao
 import com.dailycurator.data.local.dao.GoalDao
 import com.dailycurator.data.local.dao.HabitDao
+import com.dailycurator.data.local.dao.JournalDao
 import com.dailycurator.data.local.dao.TaskDao
 import com.google.gson.Gson
 import dagger.Module
@@ -40,6 +41,9 @@ object AppModule {
 
     @Provides @Singleton
     fun provideCachedInsightDao(db: AppDatabase): CachedInsightDao = db.cachedInsightDao()
+
+    @Provides @Singleton
+    fun provideJournalDao(db: AppDatabase): JournalDao = db.journalDao()
 
     @Provides @Singleton
     fun provideAppPreferences(@ApplicationContext context: Context): AppPreferences =

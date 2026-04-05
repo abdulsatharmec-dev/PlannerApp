@@ -29,6 +29,15 @@ class SettingsViewModel @Inject constructor(
     val weeklyGoalsInsightEnabled: StateFlow<Boolean> = prefs.weeklyGoalsInsightEnabledFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.isWeeklyGoalsInsightEnabled())
 
+    val journalShareWithChat: StateFlow<Boolean> = prefs.journalShareWithChatFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.isJournalSharedWithChat())
+
+    val journalInAssistantInsight: StateFlow<Boolean> = prefs.journalInAssistantInsightFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.isJournalInAssistantInsight())
+
+    val journalInWeeklyGoalsInsight: StateFlow<Boolean> = prefs.journalInWeeklyGoalsInsightFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.isJournalInWeeklyGoalsInsight())
+
     private val _cerebrasKey = MutableStateFlow(prefs.getCerebrasKey())
     val cerebrasKey = _cerebrasKey.asStateFlow()
 
@@ -62,6 +71,18 @@ class SettingsViewModel @Inject constructor(
 
     fun setWeeklyGoalsInsightEnabled(enabled: Boolean) {
         prefs.setWeeklyGoalsInsightEnabled(enabled)
+    }
+
+    fun setJournalShareWithChat(enabled: Boolean) {
+        prefs.setJournalSharedWithChat(enabled)
+    }
+
+    fun setJournalInAssistantInsight(enabled: Boolean) {
+        prefs.setJournalInAssistantInsight(enabled)
+    }
+
+    fun setJournalInWeeklyGoalsInsight(enabled: Boolean) {
+        prefs.setJournalInWeeklyGoalsInsight(enabled)
     }
 
     fun persistAssistantPrompt(text: String) {

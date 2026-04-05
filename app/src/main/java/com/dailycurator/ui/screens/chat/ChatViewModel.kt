@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.dailycurator.data.chat.ChatToolExecutor
 import com.dailycurator.data.chat.PendingChatDeletion
 import com.dailycurator.data.chat.ToolCallEnvelope
+import com.dailycurator.data.ai.JournalContextFormatter
 import com.dailycurator.data.chat.cerebrasChatToolDefinitions
 import com.dailycurator.data.local.AppPreferences
 import com.dailycurator.data.local.entity.ChatMessageEntity
@@ -14,6 +15,7 @@ import com.dailycurator.data.remote.CerebrasRestClient
 import com.dailycurator.data.repository.ChatRepository
 import com.dailycurator.data.repository.GoalRepository
 import com.dailycurator.data.repository.HabitRepository
+import com.dailycurator.data.repository.JournalRepository
 import com.dailycurator.data.repository.TaskRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -44,6 +46,7 @@ class ChatViewModel @Inject constructor(
     private val taskRepository: TaskRepository,
     private val habitRepository: HabitRepository,
     private val goalRepository: GoalRepository,
+    private val journalRepository: JournalRepository,
     private val chatRepository: ChatRepository,
     private val prefs: AppPreferences,
     private val cerebras: CerebrasRestClient,
@@ -146,6 +149,7 @@ class ChatViewModel @Inject constructor(
                 role = "system",
                 content = buildString {
                     appendLine("You are Daily Curator, a planner assistant with tools to create/update tasks, weekly goals, and habits.")
+                    appendLine("If a JOURNAL section appears below, the user chose to share excerpts with you — be respectful, avoid quoting long passages, and do not invent journal content.")
                     appendLine("Use tools when the user wants changes. Reference ids from the data snapshot below.")
                     appendLine("For delete_task, delete_goal, or delete_habit: the app will ask the user to confirm — tell them to use the confirmation bar.")
                     appendLine("After tools succeed, reply briefly in natural language confirming what changed.")
@@ -267,6 +271,13 @@ class ChatViewModel @Inject constructor(
         if (goals.isEmpty()) sb.append("None\n")
         goals.forEach {
             sb.append("- id=${it.id} [${if (it.isCompleted) "X" else " "}] ${it.title}: ${it.description} deadline=${it.deadline}\n")
+        }
+
+        if (prefs.isJournalSharedWithChat()) {
+            val journal = journalRepository.getRecentForAiContext(30)
+            sb.append("\n--- JOURNAL (recent, user-enabled for chat) ---\n")
+            sb.append(JournalContextFormatter.format(journal))
+            sb.append("\n")
         }
 
         return sb.toString()
