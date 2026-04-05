@@ -20,19 +20,25 @@ import com.dailycurator.data.model.EventPriority
 import com.dailycurator.data.model.ScheduleEvent
 import com.dailycurator.ui.theme.*
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 
 @Composable
 fun TimelineEventCard(
     event: ScheduleEvent,
     modifier: Modifier = Modifier,
     contentAlpha: Float = 1f,
+    accentColorOverride: Color? = null,
+    showDurationMinutes: Boolean = true,
 ) {
-    val accentColor = when (event.priority) {
+    val accentColor = accentColorOverride ?: when (event.priority) {
         EventPriority.HIGH   -> AccentRed
         EventPriority.MEDIUM -> TimelineBlue
         EventPriority.LOW    -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     val timeFmt = remember { DateTimeFormatter.ofPattern("h:mm a") }
+    val durationMin = remember(event.startTime, event.endTime) {
+        ChronoUnit.MINUTES.between(event.startTime, event.endTime).coerceAtLeast(1)
+    }
     Card(
         modifier = modifier.fillMaxWidth().alpha(contentAlpha),
         shape = RoundedCornerShape(12.dp),
@@ -58,7 +64,16 @@ fun TimelineEventCard(
                     }
                 }
                 Text(
-                    "${event.startTime.format(timeFmt)} – ${event.endTime.format(timeFmt)}",
+                    buildString {
+                        append(event.startTime.format(timeFmt))
+                        append(" – ")
+                        append(event.endTime.format(timeFmt))
+                        if (showDurationMinutes) {
+                            append(" · ")
+                            append(durationMin)
+                            append(" min")
+                        }
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
