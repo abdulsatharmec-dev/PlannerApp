@@ -90,6 +90,9 @@ dependencies {
     implementation("ai.koog:prompt-executor-model:0.7.1")
     implementation("ai.koog:prompt-executor-clients:0.7.1")
     implementation("ai.koog:prompt-llm:0.7.1")
+    val markdownRenderer = "0.26.0"
+    implementation("com.mikepenz:multiplatform-markdown-renderer:$markdownRenderer")
+    implementation("com.mikepenz:multiplatform-markdown-renderer-m3:$markdownRenderer")
     testImplementation("junit:junit:4.13.2")
     testImplementation(kotlin("test"))
     debugImplementation(libs.androidx.ui.tooling)

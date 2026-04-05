@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "DailyCurator"
 include(":app")
+include(":cerebras-koog-check")

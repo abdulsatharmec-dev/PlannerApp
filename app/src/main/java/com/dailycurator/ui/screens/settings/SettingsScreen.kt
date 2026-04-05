@@ -7,6 +7,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,12 +21,28 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.dailycurator.data.local.CerebrasModelOption
 import com.dailycurator.ui.theme.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val isDark by viewModel.isDarkTheme.collectAsState()
     val cerebrasKey by viewModel.cerebrasKey.collectAsState()
+    val cerebrasModelId by viewModel.cerebrasModelId.collectAsState()
+    var modelMenuExpanded by remember { mutableStateOf(false) }
+    val catalog = viewModel.cerebrasModelChoices
+    val pickerOptions = remember(cerebrasModelId, catalog) {
+        buildList {
+            addAll(catalog)
+            val known = catalog.map { it.modelId }.toSet()
+            if (cerebrasModelId.isNotBlank() && cerebrasModelId !in known) {
+                add(CerebrasModelOption("Other (saved id)", cerebrasModelId))
+            }
+        }
+    }
+    val selectedModelLabel =
+        pickerOptions.find { it.modelId == cerebrasModelId }?.displayName ?: cerebrasModelId
 
     LazyColumn(
         modifier = Modifier
@@ -107,6 +127,45 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp)
                     )
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        "Model",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    ExposedDropdownMenuBox(
+                        expanded = modelMenuExpanded,
+                        onExpandedChange = { modelMenuExpanded = it }
+                    ) {
+                        OutlinedTextField(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(),
+                            readOnly = true,
+                            value = selectedModelLabel,
+                            onValueChange = {},
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = modelMenuExpanded)
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = modelMenuExpanded,
+                            onDismissRequest = { modelMenuExpanded = false }
+                        ) {
+                            pickerOptions.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option.displayName) },
+                                    onClick = {
+                                        viewModel.onCerebrasModelSelected(option.modelId)
+                                        modelMenuExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
                     Spacer(Modifier.height(12.dp))
                     Button(
                         onClick = { viewModel.saveCerebrasKey() },

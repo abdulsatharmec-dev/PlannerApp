@@ -16,7 +16,7 @@ class KoogTest {
     @OptIn(ExperimentalTime::class)
     @Test
     fun testKoogCerebrasAgentSetup() {
-        val apiKey = "csk-yj5wyd5hcttwk3vdkwhvd43kd24n2mh44yemcv5ppfkeejpx"
+        val apiKey = "test-key-not-for-network"
         val client = OpenAILLMClient(
             apiKey = apiKey,
             settings = OpenAIClientSettings(baseUrl = "https://api.cerebras.ai")
