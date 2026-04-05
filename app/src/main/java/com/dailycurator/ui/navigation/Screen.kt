@@ -6,6 +6,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -18,6 +19,7 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
     object Goals   : Screen("goals",    "Goals",    Icons.Default.CheckCircle)
     object Chat    : Screen("chat",     "AI Agent", Icons.Default.AutoAwesome)
     object Journal : Screen("journal",  "Journal",  Icons.Default.MenuBook)
+    object Pomodoro: Screen("pomodoro", "Pomodoro", Icons.Default.Timer)
     object Settings: Screen("settings", "Settings", Icons.Default.Settings)
 }
 

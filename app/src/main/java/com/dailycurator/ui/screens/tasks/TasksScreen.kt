@@ -34,6 +34,7 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -79,7 +80,10 @@ private val WeekDayPreviewSlotHeight =
 private val WeekDayCountLineHeight = 12.dp
 
 @Composable
-fun TasksScreen(viewModel: TasksViewModel = hiltViewModel()) {
+fun TasksScreen(
+    onNavigateToPomodoro: () -> Unit = {},
+    viewModel: TasksViewModel = hiltViewModel(),
+) {
     val state by viewModel.uiState.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     var taskToEdit by remember { mutableStateOf<PriorityTask?>(null) }
@@ -115,6 +119,16 @@ fun TasksScreen(viewModel: TasksViewModel = hiltViewModel()) {
                 }
                 showAddDialog = false
                 taskToEdit = null
+            },
+            onStartPomodoro = if (taskToEdit != null && taskToEdit!!.id > 0L) {
+                {
+                    viewModel.startPomodoroForTask(taskToEdit!!)
+                    showAddDialog = false
+                    taskToEdit = null
+                    onNavigateToPomodoro()
+                }
+            } else {
+                null
             },
         )
     }
@@ -241,6 +255,12 @@ fun TasksScreen(viewModel: TasksViewModel = hiltViewModel()) {
                                 task = task,
                                 viewModel = viewModel,
                                 onEdit = { taskToEdit = task },
+                                onStartPomodoro = {
+                                    if (task.id > 0L) {
+                                        viewModel.startPomodoroForTask(task)
+                                        onNavigateToPomodoro()
+                                    }
+                                },
                                 horizontalPadding = 20.dp,
                             )
                         }
@@ -269,6 +289,12 @@ fun TasksScreen(viewModel: TasksViewModel = hiltViewModel()) {
                                     task = task,
                                     viewModel = viewModel,
                                     onEdit = { taskToEdit = task },
+                                    onStartPomodoro = {
+                                        if (task.id > 0L) {
+                                            viewModel.startPomodoroForTask(task)
+                                            onNavigateToPomodoro()
+                                        }
+                                    },
                                     horizontalPadding = 20.dp,
                                 )
                             }
@@ -473,6 +499,7 @@ private fun TaskRow(
     task: PriorityTask,
     viewModel: TasksViewModel,
     onEdit: () -> Unit,
+    onStartPomodoro: () -> Unit,
     horizontalPadding: androidx.compose.ui.unit.Dp,
 ) {
     SwipeToDeleteContainer(
@@ -482,6 +509,7 @@ private fun TaskRow(
         PriorityItem(
             task = t,
             onToggleDone = { viewModel.toggleTaskDone(t) },
+            onStartPomodoro = if (t.id > 0L) onStartPomodoro else null,
             modifier = Modifier
                 .padding(horizontal = horizontalPadding)
                 .clickable { onEdit() },
@@ -539,6 +567,7 @@ private fun ManageTaskDialog(
     defaultListDate: LocalDate,
     onDismiss: () -> Unit,
     onConfirm: (String, LocalDate, LocalTime, LocalTime, Urgency, Boolean, String?) -> Unit,
+    onStartPomodoro: (() -> Unit)? = null,
 ) {
     var title by remember(task?.id) { mutableStateOf(task?.title ?: "") }
     var note by remember(task?.id) { mutableStateOf(task?.statusNote ?: "") }
@@ -650,6 +679,18 @@ private fun ManageTaskDialog(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     androidx.compose.material3.Checkbox(checked = isTop5, onCheckedChange = { isTop5 = it })
                     Text("Mark as Top 5 Priority", style = MaterialTheme.typography.bodyMedium)
+                }
+                if (task != null && task.id > 0L && onStartPomodoro != null) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            onStartPomodoro()
+                            onDismiss()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Start Pomodoro")
+                    }
                 }
             }
         },

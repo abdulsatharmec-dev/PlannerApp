@@ -3,6 +3,8 @@ package com.dailycurator.ui.screens.goals
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dailycurator.data.model.WeeklyGoal
+import com.dailycurator.data.pomodoro.PomodoroLaunchRequest
+import com.dailycurator.data.pomodoro.PomodoroNavBridge
 import com.dailycurator.data.repository.GoalRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -21,7 +23,8 @@ data class GoalsUiState(
 
 @HiltViewModel
 class GoalsViewModel @Inject constructor(
-    private val repo: GoalRepository
+    private val repo: GoalRepository,
+    private val pomodoroNavBridge: PomodoroNavBridge,
 ) : ViewModel() {
 
     private val today = LocalDate.now()
@@ -40,6 +43,16 @@ class GoalsViewModel @Inject constructor(
 
     fun addGoal(title: String, description: String?, deadline: String?, timeEstimate: String?, category: String) = viewModelScope.launch {
         repo.insert(WeeklyGoal(title = title, description = description, deadline = deadline, timeEstimate = timeEstimate, category = category, weekStart = weekStart))
+    }
+
+    fun startPomodoroForGoal(goal: WeeklyGoal) {
+        pomodoroNavBridge.push(
+            PomodoroLaunchRequest(
+                entityType = PomodoroLaunchRequest.TYPE_GOAL,
+                entityId = goal.id,
+                title = goal.title,
+            ),
+        )
     }
 }
 

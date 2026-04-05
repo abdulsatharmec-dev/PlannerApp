@@ -28,6 +28,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
@@ -45,6 +46,7 @@ import com.dailycurator.ui.screens.goals.GoalsScreen
 import com.dailycurator.ui.screens.habits.HabitsScreen
 import com.dailycurator.ui.screens.journal.JournalEditorScreen
 import com.dailycurator.ui.screens.journal.JournalsScreen
+import com.dailycurator.ui.screens.pomodoro.PomodoroScreen
 import com.dailycurator.ui.screens.settings.SettingsScreen
 import com.dailycurator.ui.screens.tasks.TasksScreen
 import com.dailycurator.ui.screens.today.TodayScreen
@@ -52,15 +54,37 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppNavHost() {
+fun AppNavHost(
+    openPomodoroRequest: Boolean = false,
+    openHabitsRequest: Boolean = false,
+    onConsumedOpenPomodoro: () -> Unit = {},
+    onConsumedOpenHabits: () -> Unit = {},
+) {
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
+
+    LaunchedEffect(openPomodoroRequest) {
+        if (openPomodoroRequest) {
+            navController.navigate(Screen.Pomodoro.route) { launchSingleTop = true }
+            onConsumedOpenPomodoro()
+        }
+    }
+    LaunchedEffect(openHabitsRequest) {
+        if (openHabitsRequest) {
+            navController.navigate(Screen.Habits.route) {
+                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                launchSingleTop = true
+            }
+            onConsumedOpenHabits()
+        }
+    }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val isJournalEditor = currentRoute?.startsWith("journal_editor/") == true
     val journalDrawerSelected =
         currentRoute == Screen.Journal.route || isJournalEditor
+    val pomodoroDrawerSelected = currentRoute == Screen.Pomodoro.route
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -84,6 +108,21 @@ fun AppNavHost() {
                         } else {
                             navController.navigate(Screen.Journal.route) { launchSingleTop = true }
                         }
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                    colors = NavigationDrawerItemDefaults.colors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        selectedTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ),
+                )
+                NavigationDrawerItem(
+                    icon = { Icon(Screen.Pomodoro.icon, contentDescription = null) },
+                    label = { Text("Pomodoro") },
+                    selected = pomodoroDrawerSelected,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        navController.navigate(Screen.Pomodoro.route) { launchSingleTop = true }
                     },
                     modifier = Modifier.padding(horizontal = 12.dp),
                     colors = NavigationDrawerItemDefaults.colors(
@@ -194,10 +233,27 @@ fun AppNavHost() {
                 startDestination = Screen.Today.route,
                 modifier = Modifier.padding(innerPadding),
             ) {
-                composable(Screen.Today.route) { TodayScreen() }
-                composable(Screen.Tasks.route) { TasksScreen() }
-                composable(Screen.Habits.route) { HabitsScreen() }
-                composable(Screen.Goals.route) { GoalsScreen() }
+                composable(Screen.Today.route) {
+                    TodayScreen(
+                        onNavigateToPomodoro = { navController.navigate(Screen.Pomodoro.route) },
+                    )
+                }
+                composable(Screen.Tasks.route) {
+                    TasksScreen(
+                        onNavigateToPomodoro = { navController.navigate(Screen.Pomodoro.route) },
+                    )
+                }
+                composable(Screen.Habits.route) {
+                    HabitsScreen(
+                        onNavigateToPomodoro = { navController.navigate(Screen.Pomodoro.route) },
+                    )
+                }
+                composable(Screen.Goals.route) {
+                    GoalsScreen(
+                        onNavigateToPomodoro = { navController.navigate(Screen.Pomodoro.route) },
+                    )
+                }
+                composable(Screen.Pomodoro.route) { PomodoroScreen() }
                 composable(Screen.Chat.route) { ChatScreen() }
                 composable(Screen.Journal.route) {
                     JournalsScreen(

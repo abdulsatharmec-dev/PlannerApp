@@ -28,21 +28,77 @@ import com.dailycurator.data.model.Habit
 import com.dailycurator.ui.components.DurationPresetSelector
 import com.dailycurator.ui.components.NumericTargetStepper
 import com.dailycurator.ui.components.formatDurationMinutes
+import java.time.LocalDate
 import kotlin.math.roundToInt
 
 @Composable
-fun HabitsScreen(viewModel: HabitsViewModel = hiltViewModel()) {
+fun HabitsScreen(
+    onNavigateToPomodoro: () -> Unit = {},
+    viewModel: HabitsViewModel = hiltViewModel(),
+) {
     val state by viewModel.uiState.collectAsState()
     var showAddHabit by remember { mutableStateOf(false) }
     var habitToMarkDone by remember { mutableStateOf<Habit?>(null) }
+    var selectedHabit by remember { mutableStateOf<Habit?>(null) }
+    var habitToEdit by remember { mutableStateOf<Habit?>(null) }
+    var habitPendingDelete by remember { mutableStateOf<Habit?>(null) }
+    var detailCalendarMonth by remember { mutableStateOf(LocalDate.now()) }
+    var completedDays by remember { mutableStateOf<Set<LocalDate>>(emptySet()) }
+    var missedWindow by remember { mutableStateOf(0) }
+
+    val seriesKey = selectedHabit?.let { h -> h.seriesId.ifBlank { h.id.toString() } } ?: ""
+    val habitLogs by viewModel.habitLogsFlow(seriesKey).collectAsState(initial = emptyList())
+
+    LaunchedEffect(selectedHabit?.id, detailCalendarMonth) {
+        val h = selectedHabit ?: return@LaunchedEffect
+        completedDays = viewModel.completedDaysForMonth(h, detailCalendarMonth)
+    }
+    LaunchedEffect(selectedHabit?.id) {
+        val h = selectedHabit ?: return@LaunchedEffect
+        missedWindow = viewModel.missedCountFor(h)
+    }
 
     if (showAddHabit) {
         AddHabitDialog(
+            habit = null,
             onDismiss = { showAddHabit = false },
-            onConfirm = { name, category, type, emoji, target, unit, trigger, freq ->
+            onSave = { _, name, category, type, emoji, target, unit, trigger, freq ->
                 viewModel.addHabit(name, category, type, emoji, target, unit, trigger, freq)
                 showAddHabit = false
-            }
+            },
+        )
+    }
+
+    habitToEdit?.let { editing ->
+        AddHabitDialog(
+            habit = editing,
+            onDismiss = { habitToEdit = null },
+            onSave = { base, name, category, type, emoji, target, unit, trigger, freq ->
+                if (base != null) {
+                    viewModel.updateHabit(base, name, category, type, emoji, target, unit, trigger, freq)
+                }
+                habitToEdit = null
+            },
+        )
+    }
+
+    habitPendingDelete?.let { toDelete ->
+        AlertDialog(
+            onDismissRequest = { habitPendingDelete = null },
+            title = { Text("Delete habit?") },
+            text = { Text("Remove \"${toDelete.name}\" and all of its history? This cannot be undone.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteHabitSeries(toDelete)
+                        habitPendingDelete = null
+                        if (selectedHabit?.id == toDelete.id) selectedHabit = null
+                    },
+                ) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { habitPendingDelete = null }) { Text("Cancel") }
+            },
         )
     }
 
@@ -53,7 +109,36 @@ fun HabitsScreen(viewModel: HabitsViewModel = hiltViewModel()) {
             onConfirm = { note ->
                 viewModel.markHabitDone(habitToMarkDone!!, note.takeIf { it.isNotBlank() })
                 habitToMarkDone = null
-            }
+            },
+        )
+    }
+
+    selectedHabit?.let { detail ->
+        HabitDetailBottomSheet(
+            habit = detail,
+            logs = habitLogs,
+            completedDays = completedDays,
+            calendarMonth = detailCalendarMonth,
+            onMonthChange = { detailCalendarMonth = it },
+            missedCount = missedWindow,
+            onDismiss = { selectedHabit = null },
+            onEdit = {
+                habitToEdit = detail
+                selectedHabit = null
+            },
+            onRequestDelete = {
+                habitPendingDelete = detail
+                selectedHabit = null
+            },
+            onMarkDone = { note ->
+                viewModel.markHabitDone(detail, note)
+                selectedHabit = null
+            },
+            onStartPomodoro = {
+                viewModel.startPomodoroForHabit(detail)
+                selectedHabit = null
+                onNavigateToPomodoro()
+            },
         )
     }
 
@@ -200,7 +285,8 @@ fun HabitsScreen(viewModel: HabitsViewModel = hiltViewModel()) {
             HabitCard(
                 habit = habit,
                 modifier = Modifier.padding(horizontal = 20.dp),
-                onMarkDoneClick = { habitToMarkDone = habit }
+                onClick = { selectedHabit = habit },
+                onQuickDone = { habitToMarkDone = habit },
             )
             Spacer(Modifier.height(12.dp))
         }
@@ -219,7 +305,8 @@ fun HabitsScreen(viewModel: HabitsViewModel = hiltViewModel()) {
             HabitCard(
                 habit = habit,
                 modifier = Modifier.padding(horizontal = 20.dp),
-                onMarkDoneClick = { habitToMarkDone = habit }
+                onClick = { selectedHabit = habit },
+                onQuickDone = { habitToMarkDone = habit },
             )
             Spacer(Modifier.height(12.dp))
         }
@@ -227,7 +314,7 @@ fun HabitsScreen(viewModel: HabitsViewModel = hiltViewModel()) {
 }
 
 @Composable
-private fun MarkHabitDoneDialog(
+internal fun MarkHabitDoneDialog(
     habit: Habit,
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit
@@ -264,17 +351,18 @@ private fun MarkHabitDoneDialog(
 
 @Composable
 private fun AddHabitDialog(
+    habit: Habit?,
     onDismiss: () -> Unit,
-    onConfirm: (String, String, HabitType, String, Float, String, String?, String) -> Unit
+    onSave: (Habit?, String, String, HabitType, String, Float, String, String?, String) -> Unit,
 ) {
-    var name      by remember { mutableStateOf("") }
-    var emoji     by remember { mutableStateOf("⭐") }
-    var targetFloat by remember { mutableStateOf(1f) }
-    var unit      by remember { mutableStateOf("times") }
-    var category  by remember { mutableStateOf("Physical") }
-    var habitType by remember { mutableStateOf(HabitType.BUILDING) }
-    var trigger   by remember { mutableStateOf("") }
-    var frequency by remember { mutableStateOf("daily") }
+    var name      by remember(habit?.id) { mutableStateOf(habit?.name ?: "") }
+    var emoji     by remember(habit?.id) { mutableStateOf(habit?.iconEmoji ?: "⭐") }
+    var targetFloat by remember(habit?.id) { mutableStateOf(habit?.targetValue ?: 1f) }
+    var unit      by remember(habit?.id) { mutableStateOf(habit?.unit ?: "times") }
+    var category  by remember(habit?.id) { mutableStateOf(habit?.category ?: "Physical") }
+    var habitType by remember(habit?.id) { mutableStateOf(habit?.habitType ?: HabitType.BUILDING) }
+    var trigger   by remember(habit?.id) { mutableStateOf(habit?.trigger ?: "") }
+    var frequency by remember(habit?.id) { mutableStateOf(habit?.frequency ?: "daily") }
     var nameError by remember { mutableStateOf(false) }
 
     LaunchedEffect(unit) {
@@ -290,9 +378,12 @@ private fun AddHabitDialog(
         titleContentColor = MaterialTheme.colorScheme.onSurface,
         textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         title = {
-            Text("New Habit",
+            Text(
+                if (habit == null) "New Habit" else "Edit Habit",
                 style = MaterialTheme.typography.titleLarge.copy(
-                    color = MaterialTheme.colorScheme.onSurface))
+                    color = MaterialTheme.colorScheme.onSurface,
+                ),
+            )
         },
         text = {
             LazyColumn(
@@ -443,7 +534,7 @@ private fun AddHabitDialog(
                 item {
                     Text("Frequency", style = MaterialTheme.typography.labelMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant))
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        items(listOf("daily", "weekly", "weekdays")) { f ->
+                        items(listOf("daily", "weekly", "weekdays", "monthly")) { f ->
                             FilterChip(
                                 selected = frequency == f,
                                 onClick = { frequency = f },
@@ -457,17 +548,18 @@ private fun AddHabitDialog(
         confirmButton = {
             Button(onClick = {
                 if (name.isBlank()) { nameError = true; return@Button }
-                onConfirm(
-                    name.trim(), 
-                    category.trim().ifBlank { "Uncategorized" }, 
-                    habitType, 
+                onSave(
+                    habit,
+                    name.trim(),
+                    category.trim().ifBlank { "Uncategorized" },
+                    habitType,
                     emoji.trim().ifBlank { "⭐" },
-                    targetFloat, 
+                    targetFloat,
                     unit.trim().ifBlank { "times" },
                     trigger.trim().takeIf { it.isNotBlank() },
-                    frequency
+                    frequency,
                 )
-            }) { Text("Add Habit") }
+            }) { Text(if (habit == null) "Add Habit" else "Save") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }

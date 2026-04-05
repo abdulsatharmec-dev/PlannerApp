@@ -3,10 +3,33 @@ package com.dailycurator.ui.components
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -18,162 +41,149 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dailycurator.data.model.Habit
-
 import com.dailycurator.data.model.HabitType
-import com.dailycurator.ui.theme.*
+import com.dailycurator.ui.theme.AccentDeepGreen
+import com.dailycurator.ui.theme.AccentGreen
+import com.dailycurator.ui.theme.AccentRed
+import com.dailycurator.ui.theme.AccentTeal
+import com.dailycurator.ui.theme.Primary
+import com.dailycurator.ui.theme.ProgressTrack
 
 @Composable
 fun HabitCard(
     habit: Habit,
     modifier: Modifier = Modifier,
-    onMarkDoneClick: () -> Unit = {}
+    onClick: () -> Unit = {},
+    onQuickDone: () -> Unit = {},
 ) {
     val isEliminating = habit.habitType == HabitType.ELIMINATING
     val categoryColor = when (habit.category) {
-        "Physical"  -> AccentTeal
-        "Mental"    -> AccentBrown
-        "Spiritual" -> AccentDeepGreen
+        "Physical", "PHYSICAL" -> AccentTeal
+        "Mental", "MENTAL" -> AccentRed
+        "Spiritual", "SPIRITUAL" -> AccentDeepGreen
         else -> Primary
     }
     val progressColor = when {
         isEliminating -> AccentRed
-        habit.category == "Mental"    -> AccentRed
-        habit.category == "Spiritual" -> AccentDeepGreen
-        else -> Primary
+        habit.isDone || habit.isGoalMet -> AccentDeepGreen
+        else -> categoryColor
     }
-    val iconBgColor = when (habit.category) {
-        "Physical"  -> Color(0xFFE0F7FA)
-        "Mental"    -> Color(0xFFFBE9E7)
-        "Spiritual" -> Color(0xFFE8F5E9)
+    val trackColor = ProgressTrack
+    val cardTint = when {
+        habit.isDone -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+        habit.progress >= 0.99f -> AccentGreen.copy(alpha = 0.08f)
         else -> MaterialTheme.colorScheme.surface
     }
 
     var animStarted by remember { mutableStateOf(false) }
     val animatedProgress by animateFloatAsState(
         targetValue = if (animStarted) habit.progress else 0f,
-        animationSpec = tween(600), label = "progress"
+        animationSpec = tween(500),
+        label = "habitProgress",
     )
     LaunchedEffect(Unit) { animStarted = true }
 
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (habit.isDone) {
-                MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
-            } else {
-                MaterialTheme.colorScheme.surface
-            }
-        ),
-        elevation = CardDefaults.cardElevation(0.dp)
+        colors = CardDefaults.cardColors(containerColor = cardTint),
+        elevation = CardDefaults.cardElevation(0.dp),
     ) {
-        Column(modifier = Modifier.padding(16.dp).let { if (habit.isDone) it.background(Color.Transparent).alpha(0.6f) else it }) {
-            Row(verticalAlignment = Alignment.Top) {
-                // Icon box
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(iconBgColor),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(habit.iconEmoji, fontSize = 22.sp)
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(habit.name,
-                        style = MaterialTheme.typography.titleLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Spacer(Modifier.height(3.dp))
-                    Text(
-                        habit.category,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            color = categoryColor, fontWeight = FontWeight.SemiBold,
-                            letterSpacing = 0.8.sp)
-                    )
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    if (!habit.isDone) {
-                        Button(
-                            onClick = onMarkDoneClick,
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                            modifier = Modifier.height(30.dp)
-                        ) {
-                            Text("Done", fontSize = 12.sp)
-                        }
-                    } else {
-                        Text(
-                            "Completed",
-                            style = MaterialTheme.typography.bodySmall.copy(color = AccentDeepGreen, fontWeight = FontWeight.Bold)
-                        )
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        if (isEliminating) "Resistance" else "Streak",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Text(
-                        "${habit.streakDays} Days",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            color = if (isEliminating) AccentRed else Primary,
-                            fontWeight = FontWeight.Bold)
-                    )
-                }
-            }
-            Spacer(Modifier.height(14.dp))
-            // Progress row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                val valueStr = if (habit.unit.contains("L"))
-                    "%.1fL / %.1fL".format(habit.currentValue, habit.targetValue)
-                else
-                    "${habit.currentValue.toInt()} / ${habit.targetValue.toInt()} ${habit.unit}"
-                Text(valueStr, style = MaterialTheme.typography.bodySmall)
-                if (habit.isGoalMet) {
-                    Text("Goal Met",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = AccentDeepGreen, fontWeight = FontWeight.SemiBold))
-                } else {
-                    Text("${(habit.progress * 100).toInt()}%",
-                        style = MaterialTheme.typography.bodySmall)
-                }
-            }
-            Spacer(Modifier.height(6.dp))
-            // Progress bar
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(ProgressTrack)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(animatedProgress)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(if (habit.isGoalMet) AccentDeepGreen else progressColor)
+        Row(
+            modifier = Modifier
+                .padding(14.dp)
+                .then(if (habit.isDone) Modifier.alpha(0.72f) else Modifier),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(52.dp)) {
+                CircularProgressIndicator(
+                    progress = { animatedProgress },
+                    modifier = Modifier.size(52.dp),
+                    strokeWidth = 4.dp,
+                    color = progressColor,
+                    trackColor = trackColor,
+                    strokeCap = StrokeCap.Round,
                 )
+                Text(habit.iconEmoji, fontSize = 20.sp)
             }
-            Spacer(Modifier.height(6.dp))
-            // Bottom note
-            val baseNote = when {
-                habit.isGoalMet -> "Completed for today"
-                isEliminating   -> "${(habit.targetValue - habit.currentValue).toInt()} ${habit.unit.replace("limit","").trim()} remaining allowance"
-                habit.unit.contains("L") -> "%.1fL remaining to goal".format(habit.targetValue - habit.currentValue)
-                else -> "${(habit.targetValue - habit.currentValue).toInt()} ${habit.unit} remaining to goal"
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    habit.name,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.height(4.dp))
+                val valueStr = if (habit.unit.contains("L", ignoreCase = true)) {
+                    "%.1f / %.1f %s".format(habit.currentValue, habit.targetValue, habit.unit)
+                } else {
+                    "${habit.currentValue.toInt()} / ${habit.targetValue.toInt()} ${habit.unit}"
+                }
+                Text(
+                    valueStr,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "🔥 ${habit.streakDays}  ·  best ${habit.longestStreak}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = categoryColor,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "${habit.completionPercent}%",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = progressColor,
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(trackColor),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(animatedProgress.coerceIn(0f, 1f))
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(progressColor),
+                    )
+                }
             }
-            val finalNote = if (habit.isDone && habit.doneNote != null) {
-                "$baseNote - ${habit.doneNote}"
+            Spacer(Modifier.width(8.dp))
+            if (!habit.isDone) {
+                FilledIconButton(
+                    onClick = onQuickDone,
+                    modifier = Modifier.size(44.dp),
+                    shape = CircleShape,
+                ) {
+                    Icon(Icons.Default.Check, contentDescription = "Mark done", modifier = Modifier.size(22.dp))
+                }
             } else {
-                baseNote
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(AccentDeepGreen.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = "Done",
+                        tint = AccentDeepGreen,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
             }
-            Text(finalNote,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    color = if (habit.isGoalMet) AccentDeepGreen else MaterialTheme.colorScheme.onSurfaceVariant))
         }
     }
 }

@@ -99,7 +99,11 @@ class ChatViewModel @Inject constructor(
             }
             is PendingChatDeletion.Habit -> {
                 val h = habitRepository.getById(p.id)
-                if (h != null) habitRepository.delete(h)
+                if (h != null) {
+                    val sid = h.seriesId.ifBlank { null }
+                    if (!sid.isNullOrBlank()) habitRepository.deleteSeries(sid)
+                    else habitRepository.delete(h)
+                }
                 if (sessionAt == chatSession) {
                     chatRepository.appendMessage("Deleted habit \"${p.title}\".", false)
                 }

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -28,14 +29,24 @@ fun formatGoalDeadlineForDisplay(deadline: String): String =
         .getOrElse { deadline }
 
 @Composable
-fun GoalListItem(goal: WeeklyGoal, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+fun GoalListItem(
+    goal: WeeklyGoal,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+    onStartPomodoro: (() -> Unit)? = null,
+) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { onToggle() }
             .padding(vertical = 10.dp, horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .clickable { onToggle() },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
         Box(
             modifier = Modifier
                 .size(22.dp)
@@ -75,6 +86,16 @@ fun GoalListItem(goal: WeeklyGoal, onToggle: () -> Unit, modifier: Modifier = Mo
                 Text(
                     info,
                     style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                )
+            }
+        }
+        }
+        if (onStartPomodoro != null) {
+            IconButton(onClick = onStartPomodoro) {
+                Icon(
+                    Icons.Default.Timer,
+                    contentDescription = "Start Pomodoro",
+                    tint = MaterialTheme.colorScheme.primary,
                 )
             }
         }

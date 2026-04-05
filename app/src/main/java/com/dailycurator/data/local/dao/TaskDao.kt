@@ -28,4 +28,7 @@ interface TaskDao {
 
     @Query("UPDATE tasks SET isDone = :done WHERE id = :id")
     suspend fun setDone(id: Long, done: Boolean)
+
+    @Query("SELECT * FROM tasks WHERE isDone = 0")
+    suspend fun getUndoneTasks(): List<TaskEntity>
 }

@@ -27,7 +27,10 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 @Composable
-fun GoalsScreen(viewModel: GoalsViewModel = hiltViewModel()) {
+fun GoalsScreen(
+    onNavigateToPomodoro: () -> Unit = {},
+    viewModel: GoalsViewModel = hiltViewModel(),
+) {
     val state by viewModel.uiState.collectAsState()
     val progress = if (state.total > 0) state.completedCount.toFloat() / state.total else 0f
     var showAddGoal by remember { mutableStateOf(false) }
@@ -160,8 +163,17 @@ fun GoalsScreen(viewModel: GoalsViewModel = hiltViewModel()) {
         }
         items(state.completedGoals, key = { it.id }) { goal ->
             GoalListItem(
-                goal = goal, onToggle = { viewModel.toggleGoal(goal) },
-                modifier = Modifier.padding(horizontal = 20.dp)
+                goal = goal,
+                onToggle = { viewModel.toggleGoal(goal) },
+                onStartPomodoro = if (goal.id > 0L) {
+                    {
+                        viewModel.startPomodoroForGoal(goal)
+                        onNavigateToPomodoro()
+                    }
+                } else {
+                    null
+                },
+                modifier = Modifier.padding(horizontal = 20.dp),
             )
         }
 
@@ -175,8 +187,17 @@ fun GoalsScreen(viewModel: GoalsViewModel = hiltViewModel()) {
         }
         items(state.pendingGoals, key = { it.id }) { goal ->
             GoalListItem(
-                goal = goal, onToggle = { viewModel.toggleGoal(goal) },
-                modifier = Modifier.padding(horizontal = 20.dp)
+                goal = goal,
+                onToggle = { viewModel.toggleGoal(goal) },
+                onStartPomodoro = if (goal.id > 0L) {
+                    {
+                        viewModel.startPomodoroForGoal(goal)
+                        onNavigateToPomodoro()
+                    }
+                } else {
+                    null
+                },
+                modifier = Modifier.padding(horizontal = 20.dp),
             )
         }
     }

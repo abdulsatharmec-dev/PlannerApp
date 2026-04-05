@@ -12,6 +12,12 @@ interface HabitDao {
     @Query("SELECT * FROM habits WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): HabitEntity?
 
+    @Query("SELECT * FROM habits WHERE seriesId = :seriesId")
+    suspend fun getAllForSeries(seriesId: String): List<HabitEntity>
+
+    @Query("DELETE FROM habits WHERE seriesId = :seriesId")
+    suspend fun deleteAllForSeries(seriesId: String)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(habit: HabitEntity): Long
 

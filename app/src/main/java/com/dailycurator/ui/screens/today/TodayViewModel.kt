@@ -7,7 +7,10 @@ import com.dailycurator.data.model.*
 import com.dailycurator.data.repository.GoalRepository
 import com.dailycurator.data.repository.HabitRepository
 import com.dailycurator.data.repository.InsightCacheRepository
+import com.dailycurator.data.pomodoro.PomodoroLaunchRequest
+import com.dailycurator.data.pomodoro.PomodoroNavBridge
 import com.dailycurator.data.repository.TaskRepository
+import com.dailycurator.reminders.TaskReminderScheduler
 import com.dailycurator.data.repository.toAiInsight
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -48,6 +51,8 @@ class TodayViewModel @Inject constructor(
     private val habitRepo: HabitRepository,
     private val insightRepo: InsightCacheRepository,
     private val prefs: AppPreferences,
+    private val pomodoroNavBridge: PomodoroNavBridge,
+    private val taskReminderScheduler: TaskReminderScheduler,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TodayUiState())
@@ -127,7 +132,15 @@ class TodayViewModel @Inject constructor(
         _uiState.update { it.copy(weeklyGoalsInsightLoading = false) }
     }
 
-    fun toggleTaskDone(task: PriorityTask) = viewModelScope.launch { taskRepo.toggleDone(task) }
+    fun toggleTaskDone(task: PriorityTask) = viewModelScope.launch {
+        taskRepo.toggleDone(task)
+        val t = taskRepo.getById(task.id) ?: return@launch
+        if (t.isDone) {
+            taskReminderScheduler.cancel(t.id)
+        } else {
+            taskReminderScheduler.schedule(t)
+        }
+    }
     fun toggleGoalsCollapsed() = _uiState.update { it.copy(goalsCollapsed = !it.goalsCollapsed) }
     fun setScheduleTab(tab: ScheduleTab) = _uiState.update { it.copy(scheduleTab = tab) }
     fun toggleGoal(goal: WeeklyGoal) = viewModelScope.launch { goalRepo.toggleCompleted(goal) }
@@ -139,7 +152,7 @@ class TodayViewModel @Inject constructor(
         urgency: Urgency = Urgency.GREEN
     ) = viewModelScope.launch {
         val nextRank = (_uiState.value.tasks.maxOfOrNull { it.rank } ?: 0) + 1
-        taskRepo.insert(
+        val newId = taskRepo.insert(
             PriorityTask(
                 rank = nextRank,
                 title = title,
@@ -148,6 +161,17 @@ class TodayViewModel @Inject constructor(
                 urgency = urgency,
                 date = today
             )
+        )
+        taskRepo.getById(newId)?.let { taskReminderScheduler.schedule(it) }
+    }
+
+    fun startPomodoroForTask(task: PriorityTask) {
+        pomodoroNavBridge.push(
+            PomodoroLaunchRequest(
+                entityType = PomodoroLaunchRequest.TYPE_TASK,
+                entityId = task.id,
+                title = task.title,
+            ),
         )
     }
 

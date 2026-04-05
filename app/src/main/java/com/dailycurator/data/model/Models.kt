@@ -54,6 +54,8 @@ data class WeeklyGoal(
 
 data class Habit(
     val id: Long = 0,
+    /** Stable key for logs, calendar, and analytics (one per logical habit). */
+    val seriesId: String = "",
     val name: String,
     val category: String,
     val habitType: HabitType = HabitType.BUILDING,
@@ -64,12 +66,14 @@ data class Habit(
     val trigger: String? = null,
     val frequency: String = "daily",
     val streakDays: Int = 0,
+    val longestStreak: Int = 0,
     val date: LocalDate = LocalDate.now(),
     val isDone: Boolean = false,
-    val doneNote: String? = null
+    val doneNote: String? = null,
 ) {
     val progress: Float get() = (currentValue / targetValue).coerceIn(0f, 1f)
     val isGoalMet: Boolean get() = currentValue >= targetValue
+    val completionPercent: Int get() = (progress * 100f).toInt().coerceIn(0, 100)
 }
 
 data class AiInsight(

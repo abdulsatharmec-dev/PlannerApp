@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,7 +28,8 @@ import com.dailycurator.ui.theme.*
 fun PriorityItem(
     task: PriorityTask,
     onToggleDone: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onStartPomodoro: (() -> Unit)? = null,
 ) {
     val accentColor = when (task.urgency) {
         Urgency.GREEN   -> AccentGreen
@@ -88,6 +90,19 @@ fun PriorityItem(
                     Text(subtitle, style = MaterialTheme.typography.bodySmall)
                 }
                 Spacer(Modifier.width(8.dp))
+                if (onStartPomodoro != null && task.id > 0L) {
+                    IconButton(
+                        onClick = onStartPomodoro,
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.Timer,
+                            contentDescription = "Start Pomodoro",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    Spacer(Modifier.width(4.dp))
+                }
                 // Done toggle
                 Box(
                     modifier = Modifier

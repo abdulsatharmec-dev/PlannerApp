@@ -10,13 +10,17 @@ import com.dailycurator.data.local.dao.CachedInsightDao
 import com.dailycurator.data.local.dao.ChatMessageDao
 import com.dailycurator.data.local.dao.GoalDao
 import com.dailycurator.data.local.dao.HabitDao
+import com.dailycurator.data.local.dao.HabitLogDao
 import com.dailycurator.data.local.dao.JournalDao
+import com.dailycurator.data.local.dao.PomodoroDao
 import com.dailycurator.data.local.dao.TaskDao
 import com.dailycurator.data.local.entity.CachedInsightEntity
 import com.dailycurator.data.local.entity.ChatMessageEntity
 import com.dailycurator.data.local.entity.GoalEntity
 import com.dailycurator.data.local.entity.HabitEntity
+import com.dailycurator.data.local.entity.HabitLogEntity
 import com.dailycurator.data.local.entity.JournalEntryEntity
+import com.dailycurator.data.local.entity.PomodoroSessionEntity
 import com.dailycurator.data.local.entity.TaskEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,9 +31,10 @@ import java.time.format.DateTimeFormatter
 @Database(
     entities = [
         TaskEntity::class, HabitEntity::class, GoalEntity::class, ChatMessageEntity::class,
-        CachedInsightEntity::class, JournalEntryEntity::class,
+        CachedInsightEntity::class, JournalEntryEntity::class, HabitLogEntity::class,
+        PomodoroSessionEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -39,6 +44,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun chatMessageDao(): ChatMessageDao
     abstract fun cachedInsightDao(): CachedInsightDao
     abstract fun journalDao(): JournalDao
+    abstract fun habitLogDao(): HabitLogDao
+    abstract fun pomodoroDao(): PomodoroDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
@@ -92,10 +99,64 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE habits ADD COLUMN seriesId TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE habits ADD COLUMN longestStreak INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("UPDATE habits SET seriesId = CAST(id AS TEXT) WHERE seriesId = ''")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `habit_logs` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `habitSeriesId` TEXT NOT NULL,
+                        `dayKey` TEXT NOT NULL,
+                        `note` TEXT,
+                        `loggedAtMillis` INTEGER NOT NULL,
+                        `valueCompleted` REAL NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS `index_habit_logs_habitSeriesId_dayKey`
+                    ON `habit_logs` (`habitSeriesId`, `dayKey`)
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `pomodoro_sessions` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `entityType` TEXT NOT NULL,
+                        `entityId` INTEGER NOT NULL,
+                        `habitSeriesId` TEXT,
+                        `title` TEXT NOT NULL,
+                        `startedAtMillis` INTEGER NOT NULL,
+                        `endedAtMillis` INTEGER,
+                        `plannedDurationSeconds` INTEGER NOT NULL,
+                        `actualFocusedSeconds` INTEGER NOT NULL DEFAULT 0,
+                        `completed` INTEGER NOT NULL DEFAULT 0
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    CREATE INDEX IF NOT EXISTS `index_pomodoro_sessions_entityType_entityId`
+                    ON `pomodoro_sessions` (`entityType`, `entityId`)
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    CREATE INDEX IF NOT EXISTS `index_pomodoro_sessions_endedAtMillis`
+                    ON `pomodoro_sessions` (`endedAtMillis`)
+                    """.trimIndent(),
+                )
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 Room.databaseBuilder(context, AppDatabase::class.java, "daily_curator.db")
-                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                     .fallbackToDestructiveMigration()
                     .addCallback(object : Callback() {
                         override fun onCreate(db: SupportSQLiteDatabase) {
@@ -135,19 +196,23 @@ abstract class AppDatabase : RoomDatabase() {
 
             // Seed habits
             db.habitDao().apply {
-                insert(HabitEntity(name = "Hydration Protocol", category = "PHYSICAL",
+                insert(HabitEntity(seriesId = "seed-hydration", longestStreak = 12,
+                    name = "Hydration Protocol", category = "PHYSICAL",
                     habitType = "BUILDING", iconEmoji = "💧",
                     currentValue = 2.2f, targetValue = 3.0f, unit = "L",
                     streakDays = 12, date = today))
-                insert(HabitEntity(name = "Deep Focus Session", category = "MENTAL",
+                insert(HabitEntity(seriesId = "seed-focus", longestStreak = 5,
+                    name = "Deep Focus Session", category = "MENTAL",
                     habitType = "BUILDING", iconEmoji = "🧘",
                     currentValue = 3f, targetValue = 5f, unit = "sessions",
                     streakDays = 5, date = today))
-                insert(HabitEntity(name = "Sacred Reading", category = "SPIRITUAL",
+                insert(HabitEntity(seriesId = "seed-reading", longestStreak = 28,
+                    name = "Sacred Reading", category = "SPIRITUAL",
                     habitType = "BUILDING", iconEmoji = "📖",
                     currentValue = 20f, targetValue = 20f, unit = "mins",
                     streakDays = 28, date = today))
-                insert(HabitEntity(name = "Digital Distraction", category = "MENTAL",
+                insert(HabitEntity(seriesId = "seed-digital", longestStreak = 3,
+                    name = "Digital Distraction", category = "MENTAL",
                     habitType = "ELIMINATING", iconEmoji = "📱",
                     currentValue = 15f, targetValue = 30f, unit = "min limit",
                     streakDays = 3, date = today))

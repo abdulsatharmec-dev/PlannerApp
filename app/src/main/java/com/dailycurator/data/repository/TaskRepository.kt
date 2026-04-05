@@ -75,4 +75,9 @@ class TaskRepository @Inject constructor(private val dao: TaskDao) {
             urgency = task.urgency.name, isDone = task.isDone,
             date = task.date.format(DATE_FMT))
     )
+
+    suspend fun getUndoneTasks(): List<PriorityTask> =
+        dao.getUndoneTasks().map { it.toPriorityTask() }
+
+    suspend fun setDoneById(id: Long, done: Boolean) = dao.setDone(id, done)
 }

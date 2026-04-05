@@ -4,7 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dailycurator.data.model.PriorityTask
 import com.dailycurator.data.model.Urgency
+import com.dailycurator.data.pomodoro.PomodoroLaunchRequest
+import com.dailycurator.data.pomodoro.PomodoroNavBridge
 import com.dailycurator.data.repository.TaskRepository
+import com.dailycurator.reminders.TaskReminderScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -67,6 +70,8 @@ private fun buildPrioritySections(tasks: List<PriorityTask>): List<Pair<String, 
 @HiltViewModel
 class TasksViewModel @Inject constructor(
     private val repo: TaskRepository,
+    private val pomodoroNavBridge: PomodoroNavBridge,
+    private val taskReminderScheduler: TaskReminderScheduler,
 ) : ViewModel() {
 
     private val listDate = MutableStateFlow(LocalDate.now())
@@ -124,7 +129,7 @@ class TasksViewModel @Inject constructor(
     ) = viewModelScope.launch {
         val dayTasks = repo.getTasksForDate(date).first()
         val nextRank = if (isTop5) 1 else ((dayTasks.maxOfOrNull { it.rank } ?: 0) + 1)
-        repo.insert(
+        val newId = repo.insert(
             PriorityTask(
                 rank = nextRank,
                 title = title,
@@ -135,6 +140,7 @@ class TasksViewModel @Inject constructor(
                 date = date,
             ),
         )
+        repo.getById(newId)?.let { taskReminderScheduler.schedule(it) }
     }
 
     fun updateTask(
@@ -148,24 +154,42 @@ class TasksViewModel @Inject constructor(
         note: String?,
     ) = viewModelScope.launch {
         val updatedRank = if (isTop5) 1 else task.rank.coerceAtLeast(2)
-        repo.update(
-            task.copy(
-                title = title,
-                date = date,
-                startTime = startTime,
-                endTime = endTime,
-                urgency = urgency,
-                rank = updatedRank,
-                statusNote = note,
-            ),
+        val updated = task.copy(
+            title = title,
+            date = date,
+            startTime = startTime,
+            endTime = endTime,
+            urgency = urgency,
+            rank = updatedRank,
+            statusNote = note,
         )
+        repo.update(updated)
+        taskReminderScheduler.cancel(task.id)
+        repo.getById(task.id)?.let { taskReminderScheduler.schedule(it) }
     }
 
     fun deleteTask(task: PriorityTask) = viewModelScope.launch {
+        taskReminderScheduler.cancel(task.id)
         repo.delete(task)
     }
 
     fun toggleTaskDone(task: PriorityTask) = viewModelScope.launch {
         repo.toggleDone(task)
+        val t = repo.getById(task.id) ?: return@launch
+        if (t.isDone) {
+            taskReminderScheduler.cancel(t.id)
+        } else {
+            taskReminderScheduler.schedule(t)
+        }
+    }
+
+    fun startPomodoroForTask(task: PriorityTask) {
+        pomodoroNavBridge.push(
+            PomodoroLaunchRequest(
+                entityType = PomodoroLaunchRequest.TYPE_TASK,
+                entityId = task.id,
+                title = task.title,
+            ),
+        )
     }
 }

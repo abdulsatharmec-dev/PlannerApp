@@ -28,7 +28,10 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
 @Composable
-fun TodayScreen(viewModel: TodayViewModel = hiltViewModel()) {
+fun TodayScreen(
+    onNavigateToPomodoro: () -> Unit = {},
+    viewModel: TodayViewModel = hiltViewModel(),
+) {
     val state by viewModel.uiState.collectAsState()
     val todayLabel = LocalDate.now().format(DateTimeFormatter.ofPattern("MMM d"))
     var assistantExpanded by remember { mutableStateOf(true) }
@@ -116,6 +119,14 @@ fun TodayScreen(viewModel: TodayViewModel = hiltViewModel()) {
             PriorityItem(
                 task = task,
                 onToggleDone = { viewModel.toggleTaskDone(task) },
+                onStartPomodoro = if (task.id > 0L) {
+                    {
+                        viewModel.startPomodoroForTask(task)
+                        onNavigateToPomodoro()
+                    }
+                } else {
+                    null
+                },
                 modifier = Modifier.padding(horizontal = 20.dp)
             )
             Spacer(Modifier.height(8.dp))
