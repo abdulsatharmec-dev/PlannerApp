@@ -1,5 +1,10 @@
 package com.dailycurator.data.chat
 
+import android.content.Context
+import com.dailycurator.data.gmail.GmailTokenResult
+import com.dailycurator.data.gmail.GmailTokenProvider
+import com.dailycurator.data.gmail.GmailRestClient
+import com.dailycurator.data.local.AppPreferences
 import com.dailycurator.data.model.Habit
 import com.dailycurator.data.model.HabitType
 import com.dailycurator.data.model.PriorityTask
@@ -8,8 +13,10 @@ import com.dailycurator.data.model.WeeklyGoal
 import com.dailycurator.data.repository.GoalRepository
 import com.dailycurator.data.repository.HabitRepository
 import com.dailycurator.data.repository.TaskRepository
+import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -29,6 +36,10 @@ class ChatToolExecutor @Inject constructor(
     private val taskRepository: TaskRepository,
     private val goalRepository: GoalRepository,
     private val habitRepository: HabitRepository,
+    private val prefs: AppPreferences,
+    @ApplicationContext private val context: Context,
+    private val gmailTokenProvider: GmailTokenProvider,
+    private val gmailRest: GmailRestClient,
 ) {
 
     private val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
@@ -39,6 +50,9 @@ class ChatToolExecutor @Inject constructor(
             return ToolCallEnvelope.Done(toolCallId, """{"ok":false,"error":"invalid_json_arguments"}""")
         }
         return when (functionName) {
+            "gmail_list_messages" -> gmailListMessages(args, toolCallId)
+            "gmail_get_message" -> gmailGetMessage(args, toolCallId)
+            "gmail_send_email" -> gmailSendEmail(args, toolCallId)
             "create_task" -> createTask(args, toolCallId)
             "update_task" -> updateTask(args, toolCallId)
             "delete_task" -> deleteTask(args, toolCallId)
@@ -52,6 +66,125 @@ class ChatToolExecutor @Inject constructor(
             "delete_habit" -> deleteHabit(args, toolCallId)
             else -> ToolCallEnvelope.Done(toolCallId, """{"ok":false,"error":"unknown_tool"}""")
         }
+    }
+
+    private suspend fun gmailListMessages(args: JsonObject, toolCallId: String): ToolCallEnvelope {
+        if (!prefs.isAgentGmailReadEnabled()) return err(toolCallId, "gmail_read_disabled")
+        val email = resolveGmailEmail(args) ?: return err(toolCallId, "no_gmail_account")
+        val token = when (val t = gmailTokenProvider.getAccessToken(email)) {
+            is GmailTokenResult.Ok -> t.accessToken
+            is GmailTokenResult.NeedsUserInteraction -> {
+                context.startActivity(t.intent)
+                return ToolCallEnvelope.Done(
+                    toolCallId,
+                    """{"ok":false,"error":"auth_required"}""",
+                )
+            }
+            is GmailTokenResult.Failure ->
+                return ToolCallEnvelope.Done(
+                    toolCallId,
+                    """{"ok":false,"error":"token_error","message":"${t.message}"}""",
+                )
+        }
+        val q = args.optString("search_query") ?: "newer_than:7d"
+        val max = (args.optInt("max_results") ?: 15).coerceIn(1, 25)
+        return try {
+            val ids = gmailRest.listMessageIds(token, q, max)
+            val arr = JsonArray()
+            ids.forEach { ref ->
+                runCatching {
+                    val d = gmailRest.getMessageDigest(token, ref.id)
+                    val o = JsonObject()
+                    o.addProperty("id", d.id)
+                    o.addProperty("from", d.from)
+                    o.addProperty("subject", d.subject)
+                    o.addProperty("date", d.date)
+                    o.addProperty("snippet", d.snippet)
+                    arr.add(o)
+                }
+            }
+            val out = JsonObject()
+            out.addProperty("ok", true)
+            out.addProperty("account", email)
+            out.add("messages", arr)
+            ToolCallEnvelope.Done(toolCallId, out.toString())
+        } catch (e: Exception) {
+            ToolCallEnvelope.Done(toolCallId, """{"ok":false,"error":"gmail_list_failed","message":"${e.message}"}""")
+        }
+    }
+
+    private suspend fun gmailGetMessage(args: JsonObject, toolCallId: String): ToolCallEnvelope {
+        if (!prefs.isAgentGmailReadEnabled()) return err(toolCallId, "gmail_read_disabled")
+        val email = resolveGmailEmail(args) ?: return err(toolCallId, "no_gmail_account")
+        val messageId = args.optString("message_id") ?: return err(toolCallId, "message_id_required")
+        val token = when (val t = gmailTokenProvider.getAccessToken(email)) {
+            is GmailTokenResult.Ok -> t.accessToken
+            is GmailTokenResult.NeedsUserInteraction -> {
+                context.startActivity(t.intent)
+                return ToolCallEnvelope.Done(toolCallId, """{"ok":false,"error":"auth_required"}""")
+            }
+            is GmailTokenResult.Failure ->
+                return ToolCallEnvelope.Done(
+                    toolCallId,
+                    """{"ok":false,"error":"token_error","message":"${t.message}"}""",
+                )
+        }
+        return try {
+            val digest = gmailRest.getMessageDigest(token, messageId)
+            val o = JsonObject()
+            o.addProperty("ok", true)
+            o.addProperty("id", digest.id)
+            o.addProperty("from", digest.from)
+            o.addProperty("subject", digest.subject)
+            o.addProperty("date", digest.date)
+            o.addProperty("snippet", digest.snippet)
+            if (args.optBoolean("include_full_text") == true) {
+                val body = gmailRest.getMessagePlainText(token, messageId)
+                o.addProperty("body_text", body)
+            }
+            ToolCallEnvelope.Done(toolCallId, o.toString())
+        } catch (e: Exception) {
+            ToolCallEnvelope.Done(toolCallId, """{"ok":false,"error":"gmail_get_failed","message":"${e.message}"}""")
+        }
+    }
+
+    private suspend fun gmailSendEmail(args: JsonObject, toolCallId: String): ToolCallEnvelope {
+        if (!prefs.isAgentGmailSendEnabled()) return err(toolCallId, "gmail_send_disabled")
+        val email = resolveGmailEmail(args) ?: return err(toolCallId, "no_gmail_account")
+        val to = args.optString("to") ?: return err(toolCallId, "to_required")
+        val subject = args.optString("subject") ?: return err(toolCallId, "subject_required")
+        val body = args.optString("body") ?: return err(toolCallId, "body_required")
+        val token = when (val t = gmailTokenProvider.getAccessToken(email)) {
+            is GmailTokenResult.Ok -> t.accessToken
+            is GmailTokenResult.NeedsUserInteraction -> {
+                context.startActivity(t.intent)
+                return ToolCallEnvelope.Done(toolCallId, """{"ok":false,"error":"auth_required"}""")
+            }
+            is GmailTokenResult.Failure ->
+                return ToolCallEnvelope.Done(
+                    toolCallId,
+                    """{"ok":false,"error":"token_error","message":"${t.message}"}""",
+                )
+        }
+        val mime = buildString {
+            appendLine("To: $to")
+            appendLine("Subject: $subject")
+            appendLine("Content-Type: text/plain; charset=UTF-8")
+            appendLine()
+            appendLine(body)
+        }
+        return try {
+            gmailRest.sendRawRfc822(token, mime)
+            ok(toolCallId, "sent_email", mapOf("from_account" to email, "to" to to))
+        } catch (e: Exception) {
+            ToolCallEnvelope.Done(toolCallId, """{"ok":false,"error":"gmail_send_failed","message":"${e.message}"}""")
+        }
+    }
+
+    private fun resolveGmailEmail(args: JsonObject): String? {
+        val explicit = args.optString("account_email")?.trim()?.takeIf { it.isNotEmpty() }
+        if (explicit != null) return explicit
+        return prefs.getGmailLinkedAccounts().firstOrNull()?.email
     }
 
     private fun today(): LocalDate = LocalDate.now()

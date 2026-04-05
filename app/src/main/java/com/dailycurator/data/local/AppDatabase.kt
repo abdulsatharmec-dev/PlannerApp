@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.dailycurator.data.local.dao.AgentMemoryDao
 import com.dailycurator.data.local.dao.CachedInsightDao
 import com.dailycurator.data.local.dao.ChatMessageDao
 import com.dailycurator.data.local.dao.GoalDao
@@ -14,6 +15,7 @@ import com.dailycurator.data.local.dao.HabitLogDao
 import com.dailycurator.data.local.dao.JournalDao
 import com.dailycurator.data.local.dao.PomodoroDao
 import com.dailycurator.data.local.dao.TaskDao
+import com.dailycurator.data.local.entity.AgentMemoryEntity
 import com.dailycurator.data.local.entity.CachedInsightEntity
 import com.dailycurator.data.local.entity.ChatMessageEntity
 import com.dailycurator.data.local.entity.GoalEntity
@@ -32,9 +34,9 @@ import java.time.format.DateTimeFormatter
     entities = [
         TaskEntity::class, HabitEntity::class, GoalEntity::class, ChatMessageEntity::class,
         CachedInsightEntity::class, JournalEntryEntity::class, HabitLogEntity::class,
-        PomodoroSessionEntity::class,
+        PomodoroSessionEntity::class, AgentMemoryEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -46,6 +48,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun journalDao(): JournalDao
     abstract fun habitLogDao(): HabitLogDao
     abstract fun pomodoroDao(): PomodoroDao
+    abstract fun agentMemoryDao(): AgentMemoryDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
@@ -93,6 +96,21 @@ abstract class AppDatabase : RoomDatabase() {
                         `body` TEXT NOT NULL,
                         `createdAtEpochMillis` INTEGER NOT NULL,
                         `updatedAtEpochMillis` INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `agent_memory` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `content` TEXT NOT NULL,
+                        `updatedAtEpochMillis` INTEGER NOT NULL,
+                        `isManual` INTEGER NOT NULL
                     )
                     """.trimIndent(),
                 )
@@ -156,7 +174,7 @@ abstract class AppDatabase : RoomDatabase() {
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 Room.databaseBuilder(context, AppDatabase::class.java, "daily_curator.db")
-                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                     .fallbackToDestructiveMigration()
                     .addCallback(object : Callback() {
                         override fun onCreate(db: SupportSQLiteDatabase) {

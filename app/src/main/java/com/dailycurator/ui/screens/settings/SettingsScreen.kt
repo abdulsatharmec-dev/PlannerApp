@@ -1,5 +1,6 @@
 package com.dailycurator.ui.screens.settings
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,7 +21,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.AddLink
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Info
@@ -50,14 +53,20 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.dailycurator.data.ai.AiPromptDefaults
+import com.dailycurator.data.gmail.GmailTokenResult
+import com.dailycurator.ui.LocalGmailLinkActions
 import com.dailycurator.data.local.CerebrasModelOption
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -78,10 +87,23 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val weeklyGoalsInsightPrompt by viewModel.weeklyGoalsInsightPrompt.collectAsState()
     val cerebrasKey by viewModel.cerebrasKey.collectAsState()
     val cerebrasModelId by viewModel.cerebrasModelId.collectAsState()
+    val gmailAccounts by viewModel.gmailAccounts.collectAsState()
+    val agentGmailReadEnabled by viewModel.agentGmailReadEnabled.collectAsState()
+    val agentGmailSendEnabled by viewModel.agentGmailSendEnabled.collectAsState()
+    val homeGmailSummaryEnabled by viewModel.homeGmailSummaryEnabled.collectAsState()
+    val agentMemoryEnabled by viewModel.agentMemoryEnabled.collectAsState()
+    val gmailMailboxSummaryPrompt by viewModel.gmailMailboxSummaryPrompt.collectAsState()
+    val memoryExtractionPrompt by viewModel.memoryExtractionPrompt.collectAsState()
 
     var modelMenuExpanded by remember { mutableStateOf(false) }
     var showAssistantPromptDialog by remember { mutableStateOf(false) }
     var showWeeklyPromptDialog by remember { mutableStateOf(false) }
+    var showGmailSummaryPromptDialog by remember { mutableStateOf(false) }
+    var showMemoryExtractionPromptDialog by remember { mutableStateOf(false) }
+    var manualGmailAddress by rememberSaveable { mutableStateOf("") }
+
+    val context = LocalContext.current
+    val gmailLinkActions = LocalGmailLinkActions.current
 
     val catalog = viewModel.cerebrasModelChoices
     val pickerOptions = remember(cerebrasModelId, catalog) {
@@ -117,6 +139,30 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             onSave = {
                 viewModel.persistWeeklyGoalsPrompt(it)
                 showWeeklyPromptDialog = false
+            },
+        )
+    }
+    if (showGmailSummaryPromptDialog) {
+        InsightPromptEditorDialog(
+            title = "Gmail mailbox summary prompt",
+            initialText = gmailMailboxSummaryPrompt,
+            defaultText = AiPromptDefaults.GMAIL_MAILBOX_SUMMARY,
+            onDismiss = { showGmailSummaryPromptDialog = false },
+            onSave = {
+                viewModel.persistGmailMailboxSummaryPrompt(it)
+                showGmailSummaryPromptDialog = false
+            },
+        )
+    }
+    if (showMemoryExtractionPromptDialog) {
+        InsightPromptEditorDialog(
+            title = "Memory extraction prompt",
+            initialText = memoryExtractionPrompt,
+            defaultText = AiPromptDefaults.MEMORY_EXTRACTION,
+            onDismiss = { showMemoryExtractionPromptDialog = false },
+            onSave = {
+                viewModel.persistMemoryExtractionPrompt(it)
+                showMemoryExtractionPromptDialog = false
             },
         )
     }
@@ -330,6 +376,200 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                     title = "Weekly goals system prompt",
                     subtitle = "Tap to edit · used for future generations",
                     onClick = { showWeeklyPromptDialog = true },
+                )
+            }
+        }
+
+        item {
+            SettingsSection(title = "Gmail & AI agent") {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                    Text(
+                        "Two ways to authorize: (1) Google Sign-In, or (2) save the address below, then “Grant Gmail API access” — that opens Google’s permission screen in the browser and often works when the Sign-In sheet fails. Cloud Console still needs an Android OAuth client (package + SHA-1), Gmail API enabled, and a Web client ID in default_web_client_id.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Button(
+                        onClick = {
+                            val actions = gmailLinkActions
+                            if (actions != null) actions.linkGmail()
+                            else Toast.makeText(context, "Gmail sign-in is not wired (restart the app).", Toast.LENGTH_LONG).show()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Default.AddLink, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Link Gmail account")
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    TextButton(
+                        onClick = {
+                            val actions = gmailLinkActions
+                            if (actions != null) actions.linkDifferentGoogleAccount()
+                            else Toast.makeText(context, "Gmail sign-in is not wired (restart the app).", Toast.LENGTH_LONG).show()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Use a different Google account (reset session)")
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            val email = manualGmailAddress.trim().takeIf { it.contains('@') }
+                                ?: gmailAccounts.firstOrNull()?.email
+                            if (email.isNullOrBlank()) {
+                                Toast.makeText(
+                                    context,
+                                    "Save a linked address first (or type it above).",
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                                return@Button
+                            }
+                            viewModel.startGmailAccessProbe(email) { r ->
+                                when (r) {
+                                    is GmailTokenResult.Ok ->
+                                        Toast.makeText(
+                                            context,
+                                            "Gmail access OK for $email",
+                                            Toast.LENGTH_LONG,
+                                        ).show()
+                                    is GmailTokenResult.NeedsUserInteraction ->
+                                        context.startActivity(r.intent)
+                                    is GmailTokenResult.Failure ->
+                                        Toast.makeText(
+                                            context,
+                                            r.message,
+                                            Toast.LENGTH_LONG,
+                                        ).show()
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Grant Gmail API access (browser)")
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = manualGmailAddress,
+                        onValueChange = { manualGmailAddress = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Or add address manually") },
+                        supportingText = {
+                            Text(
+                                "Same Google account must exist on this device; OAuth setup above still applies for API access.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(
+                        onClick = {
+                            val e = manualGmailAddress.trim()
+                            if (!e.contains('@')) {
+                                Toast.makeText(context, "Enter a valid email address.", Toast.LENGTH_SHORT).show()
+                            } else {
+                                viewModel.onGmailLinked(e)
+                                manualGmailAddress = ""
+                                Toast.makeText(context, "Saved: $e", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Save linked address")
+                    }
+                }
+                gmailAccounts.forEach { acc ->
+                    HorizontalDivider(Modifier.padding(start = 16.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Default.Email, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(acc.email, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                "Show in mailbox summary page",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = acc.showInSummary,
+                            onCheckedChange = { viewModel.setGmailSummaryVisible(acc.email, it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                            ),
+                        )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                    ) {
+                        TextButton(onClick = { viewModel.removeGmailAccount(acc.email) }) {
+                            Text("Remove", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+                HorizontalDivider(Modifier.padding(start = 16.dp))
+                SettingsToggleRow(
+                    icon = Icons.Default.Email,
+                    label = "Agent can read Gmail",
+                    subtitle = "Exposes gmail_list_messages and gmail_get_message tools in chat",
+                    checked = agentGmailReadEnabled,
+                    onCheckedChange = { viewModel.setAgentGmailReadEnabled(it) },
+                )
+                HorizontalDivider(Modifier.padding(start = 16.dp))
+                SettingsToggleRow(
+                    icon = null,
+                    label = "Agent can send Gmail",
+                    subtitle = "Separate permission: gmail_send_email tool",
+                    checked = agentGmailSendEnabled,
+                    onCheckedChange = { viewModel.setAgentGmailSendEnabled(it) },
+                )
+            }
+        }
+
+        item {
+            SettingsSection(title = "Gmail mailbox summary") {
+                SettingsNavRow(
+                    icon = Icons.Default.EditNote,
+                    title = "Summarization system prompt",
+                    subtitle = "Used on the Gmail Mailbox Summary page",
+                    onClick = { showGmailSummaryPromptDialog = true },
+                )
+                HorizontalDivider(Modifier.padding(start = 16.dp))
+                SettingsToggleRow(
+                    icon = null,
+                    label = "Show condensed summary on Home",
+                    subtitle = "Uses the cached digest line from the last mailbox run",
+                    checked = homeGmailSummaryEnabled,
+                    onCheckedChange = { viewModel.setHomeGmailSummaryEnabled(it) },
+                )
+            }
+        }
+
+        item {
+            SettingsSection(title = "Long-term memory") {
+                SettingsToggleRow(
+                    icon = null,
+                    label = "Use memory in chat",
+                    subtitle = "Injects stored memory into the agent context; disable to ignore",
+                    checked = agentMemoryEnabled,
+                    onCheckedChange = { viewModel.setAgentMemoryEnabled(it) },
+                )
+                HorizontalDivider(Modifier.padding(start = 16.dp))
+                SettingsNavRow(
+                    icon = Icons.Default.EditNote,
+                    title = "Memory extraction prompt",
+                    subtitle = "Used after chats and for planner-based updates",
+                    onClick = { showMemoryExtractionPromptDialog = true },
                 )
             }
         }

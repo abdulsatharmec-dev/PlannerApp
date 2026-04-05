@@ -141,6 +141,24 @@ class CerebrasRestClient @Inject constructor(
         }
     }
 
+    /** Plain assistant text; no tools. */
+    suspend fun completePlainText(
+        messages: List<CerebrasChatMessage>,
+        temperature: Double = 0.35,
+        maxTokens: Int = 4096,
+    ): String {
+        val result = chatCompletion(
+            messages = messages,
+            tools = null,
+            toolChoice = "none",
+            temperature = temperature,
+            maxTokens = maxTokens,
+        )
+        val text = result.message?.content?.trim().orEmpty()
+        if (text.isEmpty()) throw CerebrasApiException("Empty text completion")
+        return text
+    }
+
     private fun CerebrasChatMessage.toJson(): JsonObject = JsonObject().apply {
         addProperty("role", role)
         if (role == "tool") {

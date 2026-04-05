@@ -30,6 +30,7 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun TodayScreen(
     onNavigateToPomodoro: () -> Unit = {},
+    onOpenGmailMailboxSummary: () -> Unit = {},
     viewModel: TodayViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -163,6 +164,41 @@ fun TodayScreen(
                 windowStart = state.dayWindowStart,
                 windowEnd = state.dayWindowEnd,
             )
+        }
+
+        item {
+            if (state.homeGmailSummaryEnabled) {
+                Spacer(Modifier.height(16.dp))
+                Card(
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(
+                            "Gmail digest",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        when {
+                            !state.cerebrasConfigured -> Text(
+                                "Add your Cerebras API key in Settings to generate mailbox summaries.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            state.gmailHomeDigestMarkdown.isBlank() -> Text(
+                                "Open Gmail Mailbox Summary from the menu and tap Generate to refresh this card.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            else -> MarkdownSummaryBody(markdown = state.gmailHomeDigestMarkdown)
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        TextButton(onClick = onOpenGmailMailboxSummary) {
+                            Text("Open full mailbox summary")
+                        }
+                    }
+                }
+                Spacer(Modifier.height(24.dp))
+            }
         }
     }
 }

@@ -42,15 +42,25 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.dailycurator.ui.screens.chat.ChatScreen
+import com.dailycurator.ui.screens.gmail.GmailMailboxSummaryScreen
 import com.dailycurator.ui.screens.goals.GoalsScreen
 import com.dailycurator.ui.screens.habits.HabitsScreen
 import com.dailycurator.ui.screens.journal.JournalEditorScreen
 import com.dailycurator.ui.screens.journal.JournalsScreen
+import com.dailycurator.ui.screens.memory.MemoryManagementScreen
 import com.dailycurator.ui.screens.pomodoro.PomodoroScreen
 import com.dailycurator.ui.screens.settings.SettingsScreen
 import com.dailycurator.ui.screens.tasks.TasksScreen
 import com.dailycurator.ui.screens.today.TodayScreen
 import kotlinx.coroutines.launch
+
+private fun subPageTitle(route: String?): String? = when (route) {
+    Screen.Settings.route -> "Settings"
+    Screen.Journal.route -> "Journal"
+    Screen.GmailMailboxSummary.route -> "Gmail Mailbox Summary"
+    Screen.AgentMemory.route -> "Memory Management"
+    else -> null
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,6 +95,8 @@ fun AppNavHost(
     val journalDrawerSelected =
         currentRoute == Screen.Journal.route || isJournalEditor
     val pomodoroDrawerSelected = currentRoute == Screen.Pomodoro.route
+    val gmailDrawerSelected = currentRoute == Screen.GmailMailboxSummary.route
+    val memoryDrawerSelected = currentRoute == Screen.AgentMemory.route
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -131,6 +143,36 @@ fun AppNavHost(
                         selectedTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     ),
                 )
+                NavigationDrawerItem(
+                    icon = { Icon(Screen.GmailMailboxSummary.icon, contentDescription = null) },
+                    label = { Text("Gmail Mailbox Summary") },
+                    selected = gmailDrawerSelected,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        navController.navigate(Screen.GmailMailboxSummary.route) { launchSingleTop = true }
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                    colors = NavigationDrawerItemDefaults.colors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        selectedTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ),
+                )
+                NavigationDrawerItem(
+                    icon = { Icon(Screen.AgentMemory.icon, contentDescription = null) },
+                    label = { Text("Memory Management") },
+                    selected = memoryDrawerSelected,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        navController.navigate(Screen.AgentMemory.route) { launchSingleTop = true }
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                    colors = NavigationDrawerItemDefaults.colors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        selectedTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ),
+                )
             }
         },
     ) {
@@ -138,22 +180,8 @@ fun AppNavHost(
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
                 if (!isJournalEditor) {
-                    when (currentRoute) {
-                        Screen.Settings.route, Screen.Journal.route -> {
-                            val title = if (currentRoute == Screen.Settings.route) "Settings" else "Journal"
-                            TopAppBar(
-                                title = { Text(title, style = MaterialTheme.typography.titleMedium) },
-                                navigationIcon = {
-                                    IconButton(onClick = { navController.popBackStack() }) {
-                                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                                    }
-                                },
-                                colors = TopAppBarDefaults.topAppBarColors(
-                                    containerColor = MaterialTheme.colorScheme.background,
-                                ),
-                            )
-                        }
-                        else -> {
+                    when (val sub = subPageTitle(currentRoute)) {
+                        null -> {
                             CenterAlignedTopAppBar(
                                 title = {
                                     Text(
@@ -178,6 +206,19 @@ fun AppNavHost(
                                     }
                                 },
                                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                                    containerColor = MaterialTheme.colorScheme.background,
+                                ),
+                            )
+                        }
+                        else -> {
+                            TopAppBar(
+                                title = { Text(sub, style = MaterialTheme.typography.titleMedium) },
+                                navigationIcon = {
+                                    IconButton(onClick = { navController.popBackStack() }) {
+                                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                                    }
+                                },
+                                colors = TopAppBarDefaults.topAppBarColors(
                                     containerColor = MaterialTheme.colorScheme.background,
                                 ),
                             )
@@ -236,6 +277,9 @@ fun AppNavHost(
                 composable(Screen.Today.route) {
                     TodayScreen(
                         onNavigateToPomodoro = { navController.navigate(Screen.Pomodoro.route) },
+                        onOpenGmailMailboxSummary = {
+                            navController.navigate(Screen.GmailMailboxSummary.route) { launchSingleTop = true }
+                        },
                     )
                 }
                 composable(Screen.Tasks.route) {
@@ -273,6 +317,8 @@ fun AppNavHost(
                     JournalEditorScreen(onBack = { navController.popBackStack() })
                 }
                 composable(Screen.Settings.route) { SettingsScreen() }
+                composable(Screen.GmailMailboxSummary.route) { GmailMailboxSummaryScreen() }
+                composable(Screen.AgentMemory.route) { MemoryManagementScreen() }
             }
         }
     }

@@ -6,6 +6,7 @@ import com.dailycurator.data.local.AppPreferences
 import com.dailycurator.data.model.*
 import com.dailycurator.data.repository.GoalRepository
 import com.dailycurator.data.repository.HabitRepository
+import com.dailycurator.data.repository.GmailMailboxSummaryRepository
 import com.dailycurator.data.repository.InsightCacheRepository
 import com.dailycurator.data.pomodoro.PomodoroLaunchRequest
 import com.dailycurator.data.pomodoro.PomodoroNavBridge
@@ -40,6 +41,9 @@ data class TodayUiState(
     val weeklyGoalsInsightLoading: Boolean = false,
     val dayWindowStart: LocalTime = LocalTime.of(4, 0),
     val dayWindowEnd: LocalTime = LocalTime.of(22, 0),
+    val homeGmailSummaryEnabled: Boolean = false,
+    /** Condensed markdown/text for the Home card (from cached mailbox summary). */
+    val gmailHomeDigestMarkdown: String = "",
 )
 
 enum class ScheduleTab { TIMELINE, CLOCK }
@@ -50,6 +54,7 @@ class TodayViewModel @Inject constructor(
     private val goalRepo: GoalRepository,
     private val habitRepo: HabitRepository,
     private val insightRepo: InsightCacheRepository,
+    private val gmailMailboxSummaryRepo: GmailMailboxSummaryRepository,
     private val prefs: AppPreferences,
     private val pomodoroNavBridge: PomodoroNavBridge,
     private val taskReminderScheduler: TaskReminderScheduler,
@@ -116,6 +121,27 @@ class TodayViewModel @Inject constructor(
         }
         viewModelScope.launch {
             insightRepo.ensureWeeklyGoalsForTodayIfNeeded()
+        }
+        viewModelScope.launch {
+            prefs.homeGmailSummaryEnabledFlow.collect { enabled ->
+                _uiState.update { it.copy(homeGmailSummaryEnabled = enabled) }
+            }
+        }
+        viewModelScope.launch {
+            gmailMailboxSummaryRepo.observe().collect { entity ->
+                val digest = when {
+                    entity == null -> ""
+                    else -> {
+                        val rp = entity.recoveryPlan
+                        if (!rp.isNullOrBlank()) rp
+                        else {
+                            val t = entity.insightText.take(600)
+                            if (entity.insightText.length > 600) "$t…" else t
+                        }
+                    }
+                }
+                _uiState.update { it.copy(gmailHomeDigestMarkdown = digest) }
+            }
         }
     }
 

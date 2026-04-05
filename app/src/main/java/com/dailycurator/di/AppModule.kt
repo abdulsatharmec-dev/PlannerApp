@@ -3,6 +3,7 @@ package com.dailycurator.di
 import android.content.Context
 import com.dailycurator.data.local.AppDatabase
 import com.dailycurator.data.local.AppPreferences
+import com.dailycurator.data.local.dao.AgentMemoryDao
 import com.dailycurator.data.local.dao.CachedInsightDao
 import com.dailycurator.data.local.dao.ChatMessageDao
 import com.dailycurator.data.local.dao.GoalDao
@@ -54,7 +55,10 @@ object AppModule {
     fun providePomodoroDao(db: AppDatabase): PomodoroDao = db.pomodoroDao()
 
     @Provides @Singleton
-    fun provideAppPreferences(@ApplicationContext context: Context): AppPreferences =
-        AppPreferences(context)
+    fun provideAgentMemoryDao(db: AppDatabase): AgentMemoryDao = db.agentMemoryDao()
+
+    @Provides @Singleton
+    fun provideAppPreferences(@ApplicationContext context: Context, gson: Gson): AppPreferences =
+        AppPreferences(context, gson)
 }
 

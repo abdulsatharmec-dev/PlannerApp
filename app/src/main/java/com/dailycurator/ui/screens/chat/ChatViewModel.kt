@@ -7,11 +7,13 @@ import com.dailycurator.data.chat.PendingChatDeletion
 import com.dailycurator.data.chat.ToolCallEnvelope
 import com.dailycurator.data.ai.JournalContextFormatter
 import com.dailycurator.data.chat.cerebrasChatToolDefinitions
+import com.dailycurator.data.chat.gmailAgentChatTools
 import com.dailycurator.data.local.AppPreferences
 import com.dailycurator.data.local.entity.ChatMessageEntity
 import com.dailycurator.data.remote.CerebrasApiException
 import com.dailycurator.data.remote.CerebrasChatMessage
 import com.dailycurator.data.remote.CerebrasRestClient
+import com.dailycurator.data.repository.AgentMemoryRepository
 import com.dailycurator.data.repository.ChatRepository
 import com.dailycurator.data.repository.GoalRepository
 import com.dailycurator.data.repository.HabitRepository
@@ -51,6 +53,7 @@ class ChatViewModel @Inject constructor(
     private val prefs: AppPreferences,
     private val cerebras: CerebrasRestClient,
     private val toolExecutor: ChatToolExecutor,
+    private val agentMemoryRepository: AgentMemoryRepository,
 ) : ViewModel() {
 
     val messages = chatRepository.observeMessages()
@@ -131,6 +134,12 @@ class ChatViewModel @Inject constructor(
             _isLoading.value = true
             try {
                 runChatTurn(sessionAtSend)
+                if (sessionAtSend == chatSession && prefs.isAgentMemoryEnabled() && prefs.getCerebrasKey().isNotBlank()) {
+                    val recent = chatRepository.getRecentAscending(16)
+                    withContext(Dispatchers.IO) {
+                        agentMemoryRepository.extractFromRecentChat(recent)
+                    }
+                }
             } catch (e: Exception) {
                 if (sessionAtSend != chatSession) return@launch
                 chatRepository.appendMessage(
@@ -146,19 +155,25 @@ class ChatViewModel @Inject constructor(
     }
 
     private suspend fun runChatTurn(sessionAtSend: Int) {
-        val tools = cerebrasChatToolDefinitions()
+        val tools = cerebrasChatToolDefinitions() + gmailAgentChatTools(prefs)
+        val memoryBlock = agentMemoryRepository.formatForChatContext()
         val apiMessages = mutableListOf<CerebrasChatMessage>()
         apiMessages.add(
             CerebrasChatMessage(
                 role = "system",
                 content = buildString {
                     appendLine("You are Daily Curator, a planner assistant with tools to create/update tasks, weekly goals, and habits.")
+                    appendLine("If Gmail tools are listed, the user linked Google accounts in Settings. Use them only for real mail; never invent message bodies. Respect read vs send permissions.")
                     appendLine("If a JOURNAL section appears below, the user chose to share excerpts with you — be respectful, avoid quoting long passages, and do not invent journal content.")
                     appendLine("Use tools when the user wants changes. Reference ids from the data snapshot below.")
                     appendLine("For delete_task, delete_goal, or delete_habit: the app will ask the user to confirm — tell them to use the confirmation bar.")
                     appendLine("After tools succeed, reply briefly in natural language confirming what changed.")
                     appendLine()
                     append(buildContext())
+                    if (memoryBlock.isNotBlank()) {
+                        appendLine()
+                        append(memoryBlock)
+                    }
                 },
             ),
         )

@@ -1,5 +1,6 @@
 package com.dailycurator.data.chat
 
+import com.dailycurator.data.local.AppPreferences
 import com.dailycurator.data.remote.CerebrasToolDefinition
 import com.google.gson.JsonObject
 
@@ -161,5 +162,55 @@ fun cerebrasChatToolDefinitions(): List<CerebrasToolDefinition> {
         "Request deleting a habit. Requires user confirmation.",
         schema(mapOf("habit_id" to intProp("Habit id")), listOf("habit_id")),
     )
+    return tools
+}
+
+/** Gmail tools for the AI agent (mirrors Koog ToolRegistry-style registration; gated in [AppPreferences]). */
+fun gmailAgentChatTools(prefs: AppPreferences): List<CerebrasToolDefinition> {
+    if (prefs.getGmailLinkedAccounts().isEmpty()) return emptyList()
+    val tools = mutableListOf<CerebrasToolDefinition>()
+    fun add(name: String, description: String, parameters: JsonObject) {
+        tools.add(CerebrasToolDefinition(name = name, description = description, parametersSchema = parameters))
+    }
+    if (prefs.isAgentGmailReadEnabled()) {
+        add(
+            "gmail_list_messages",
+            "List Gmail message ids and short metadata for the user's linked Google account. Search uses Gmail's query syntax (e.g. newer_than:7d from:recruiter).",
+            schema(
+                mapOf(
+                    "account_email" to stringProp("Linked Gmail address; omit to use the first linked account"),
+                    "search_query" to stringProp("Gmail search query; default newer_than:7d"),
+                    "max_results" to intProp("Max messages to return; default 15, max 25"),
+                ),
+            ),
+        )
+        add(
+            "gmail_get_message",
+            "Fetch one Gmail message: headers, snippet, and optionally full plain-text body for a linked account.",
+            schema(
+                mapOf(
+                    "account_email" to stringProp("Linked Gmail address; omit for default"),
+                    "message_id" to stringProp("Gmail API message id"),
+                    "include_full_text" to boolProp("If true, include decoded text/plain body (may be truncated)"),
+                ),
+                listOf("message_id"),
+            ),
+        )
+    }
+    if (prefs.isAgentGmailSendEnabled()) {
+        add(
+            "gmail_send_email",
+            "Send a plain-text email from a linked Gmail account (requires send permission in Settings).",
+            schema(
+                mapOf(
+                    "account_email" to stringProp("Linked Gmail address; omit for default"),
+                    "to" to stringProp("Recipient email"),
+                    "subject" to stringProp("Subject line"),
+                    "body" to stringProp("Plain text body"),
+                ),
+                listOf("to", "subject", "body"),
+            ),
+        )
+    }
     return tools
 }
