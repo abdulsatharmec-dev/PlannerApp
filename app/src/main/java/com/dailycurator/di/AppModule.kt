@@ -3,10 +3,12 @@ package com.dailycurator.di
 import android.content.Context
 import com.dailycurator.data.local.AppDatabase
 import com.dailycurator.data.local.AppPreferences
+import com.dailycurator.data.local.dao.CachedInsightDao
 import com.dailycurator.data.local.dao.ChatMessageDao
 import com.dailycurator.data.local.dao.GoalDao
 import com.dailycurator.data.local.dao.HabitDao
 import com.dailycurator.data.local.dao.TaskDao
+import com.google.gson.Gson
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -17,6 +19,9 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
+    @Provides @Singleton
+    fun provideGson(): Gson = Gson()
+
     @Provides @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
         AppDatabase.getDatabase(context)
@@ -32,6 +37,9 @@ object AppModule {
 
     @Provides @Singleton
     fun provideChatMessageDao(db: AppDatabase): ChatMessageDao = db.chatMessageDao()
+
+    @Provides @Singleton
+    fun provideCachedInsightDao(db: AppDatabase): CachedInsightDao = db.cachedInsightDao()
 
     @Provides @Singleton
     fun provideAppPreferences(@ApplicationContext context: Context): AppPreferences =

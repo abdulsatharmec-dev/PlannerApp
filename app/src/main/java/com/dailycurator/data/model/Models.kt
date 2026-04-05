@@ -65,9 +65,11 @@ data class Habit(
 }
 
 data class AiInsight(
-    val id: Long = 0,
     val insightText: String,
     val boldPart: String = "",
     val recoveryPlan: String? = null,
-    val date: LocalDate = LocalDate.now()
+    /** Epoch millis when this insight was generated (null = placeholder / not yet generated). */
+    val generatedAtEpochMillis: Long? = null,
+    /** Calendar day key (ISO date) this insight was generated for. */
+    val insightDayKey: String? = null,
 )

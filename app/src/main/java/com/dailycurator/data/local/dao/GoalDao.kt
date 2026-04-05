@@ -9,6 +9,9 @@ interface GoalDao {
     @Query("SELECT * FROM goals WHERE weekStart = :weekStart")
     fun getGoalsForWeek(weekStart: String): Flow<List<GoalEntity>>
 
+    @Query("SELECT * FROM goals WHERE id = :id LIMIT 1")
+    suspend fun getById(id: Long): GoalEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(goal: GoalEntity): Long
 

@@ -5,6 +5,7 @@ import com.dailycurator.data.local.entity.TaskEntity
 import com.dailycurator.data.model.PriorityTask
 import com.dailycurator.data.model.Urgency
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.time.LocalDate
 import java.time.LocalTime
@@ -18,25 +19,32 @@ private val TIME_FMT = DateTimeFormatter.ofPattern("HH:mm")
 private fun String.toLocalTime() = LocalTime.parse(this, TIME_FMT)
 private fun String.toLocalDate() = LocalDate.parse(this, DATE_FMT)
 
+private fun TaskEntity.toPriorityTask() = PriorityTask(
+    id = id, rank = rank, title = title,
+    startTime = startTime.toLocalTime(),
+    endTime = endTime.toLocalTime(),
+    dueInfo = dueInfo, statusNote = statusNote,
+    urgency = Urgency.valueOf(urgency),
+    isDone = isDone, date = date.toLocalDate(),
+)
+
 @Singleton
 class TaskRepository @Inject constructor(private val dao: TaskDao) {
     fun getTasksForDate(date: LocalDate): Flow<List<PriorityTask>> =
         dao.getTasksForDate(date.format(DATE_FMT)).map { list ->
-            list.map { e ->
-                PriorityTask(
-                    id = e.id, rank = e.rank, title = e.title,
-                    startTime = e.startTime.toLocalTime(),
-                    endTime = e.endTime.toLocalTime(),
-                    dueInfo = e.dueInfo, statusNote = e.statusNote,
-                    urgency = Urgency.valueOf(e.urgency),
-                    isDone = e.isDone, date = e.date.toLocalDate()
-                )
-            }
+            list.map { it.toPriorityTask() }
         }
+
+    suspend fun getById(id: Long): PriorityTask? = dao.getById(id)?.toPriorityTask()
+
+    suspend fun nextRankForDate(date: LocalDate): Int {
+        val tasks = getTasksForDate(date).first()
+        return (tasks.maxOfOrNull { it.rank } ?: 0) + 1
+    }
 
     suspend fun toggleDone(task: PriorityTask) = dao.setDone(task.id, !task.isDone)
 
-    suspend fun insert(task: PriorityTask) = dao.insert(
+    suspend fun insert(task: PriorityTask): Long = dao.insert(
         TaskEntity(id = task.id, rank = task.rank, title = task.title,
             startTime = task.startTime.format(TIME_FMT),
             endTime = task.endTime.format(TIME_FMT),

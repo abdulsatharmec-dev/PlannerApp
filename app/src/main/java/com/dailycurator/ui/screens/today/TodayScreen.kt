@@ -14,16 +14,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.dailycurator.data.model.AiInsight
 import com.dailycurator.data.model.PriorityTask
 import com.dailycurator.data.model.Urgency
 import com.dailycurator.ui.components.*
 import com.dailycurator.ui.theme.*
-import kotlinx.coroutines.delay
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -32,6 +31,8 @@ import java.time.format.DateTimeFormatter
 fun TodayScreen(viewModel: TodayViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsState()
     val todayLabel = LocalDate.now().format(DateTimeFormatter.ofPattern("MMM d"))
+    var assistantExpanded by remember { mutableStateOf(true) }
+    var weeklyInsightExpanded by remember { mutableStateOf(true) }
 
     LazyColumn(
         modifier = Modifier
@@ -67,13 +68,38 @@ fun TodayScreen(viewModel: TodayViewModel = hiltViewModel()) {
             }
         }
 
-        // ── AI Insight Card
         item {
-            AIInsightCard(
-                insight = state.insight,
-                modifier = Modifier.padding(horizontal = 20.dp)
+            DayWindowProgressBar(
+                windowStart = state.dayWindowStart,
+                windowEnd = state.dayWindowEnd,
+                modifier = Modifier.padding(horizontal = 20.dp),
             )
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(16.dp))
+        }
+
+        // ── Assistant insight (optional)
+        item {
+            if (state.assistantInsightEnabled) {
+                val insight = when {
+                    !state.cerebrasConfigured -> AiInsight(
+                        insightText = "Add your Cerebras API key in Settings to generate a daily assistant insight from your tasks, goals, and habits.",
+                        boldPart = "Connect Cerebras",
+                    )
+                    else -> state.assistantInsight
+                }
+                AIInsightCard(
+                    insight = insight,
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                    expanded = assistantExpanded,
+                    onExpandedChange = { assistantExpanded = it },
+                    onRegenerate = if (state.cerebrasConfigured) {
+                        { viewModel.regenerateAssistantInsight() }
+                    } else null,
+                    isRegenerating = state.assistantInsightLoading,
+                    showRegenerate = state.cerebrasConfigured,
+                )
+                Spacer(Modifier.height(24.dp))
+            }
         }
 
         // ── Top 5 Priorities header
@@ -105,7 +131,13 @@ fun TodayScreen(viewModel: TodayViewModel = hiltViewModel()) {
                 onToggleCollapse = viewModel::toggleGoalsCollapsed,
                 onToggleGoal = viewModel::toggleGoal,
                 onAddGoal = viewModel::addGoal,
-                insight = state.insight
+                weeklyInsightEnabled = state.weeklyGoalsInsightEnabled,
+                cerebrasConfigured = state.cerebrasConfigured,
+                weeklyInsight = state.weeklyGoalsInsight,
+                weeklyInsightExpanded = weeklyInsightExpanded,
+                onWeeklyInsightExpandedChange = { weeklyInsightExpanded = it },
+                onRegenerateWeeklyInsight = { viewModel.regenerateWeeklyGoalsInsight() },
+                weeklyInsightLoading = state.weeklyGoalsInsightLoading,
             )
             Spacer(Modifier.height(24.dp))
         }
@@ -116,7 +148,9 @@ fun TodayScreen(viewModel: TodayViewModel = hiltViewModel()) {
                 events = state.scheduleEvents,
                 activeTab = state.scheduleTab,
                 onTabChange = viewModel::setScheduleTab,
-                dateLabel = todayLabel
+                dateLabel = todayLabel,
+                windowStart = state.dayWindowStart,
+                windowEnd = state.dayWindowEnd,
             )
         }
     }
@@ -132,7 +166,13 @@ private fun WeeklyGoalsSection(
     onToggleCollapse: () -> Unit,
     onToggleGoal: (com.dailycurator.data.model.WeeklyGoal) -> Unit,
     onAddGoal: (String) -> Unit,
-    insight: com.dailycurator.data.model.AiInsight
+    weeklyInsightEnabled: Boolean,
+    cerebrasConfigured: Boolean,
+    weeklyInsight: AiInsight,
+    weeklyInsightExpanded: Boolean,
+    onWeeklyInsightExpandedChange: (Boolean) -> Unit,
+    onRegenerateWeeklyInsight: () -> Unit,
+    weeklyInsightLoading: Boolean,
 ) {
     val completedCount = goals.count { it.isCompleted }
     var showAddGoal by remember { mutableStateOf(false) }
@@ -170,45 +210,23 @@ private fun WeeklyGoalsSection(
         }
         Spacer(Modifier.height(10.dp))
 
-        // AI Goal Insight
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(0.dp)
-        ) {
-            Row(modifier = Modifier.height(IntrinsicSize.Min)) {
-                Box(modifier = Modifier
-                    .width(3.dp).fillMaxHeight()
-                    .background(AccentGreen, RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp)))
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Row(verticalAlignment = Alignment.Top) {
-                        Box(
-                            modifier = Modifier
-                                .size(22.dp)
-                                .clip(androidx.compose.foundation.shape.CircleShape)
-                                .background(AccentGreen.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.AutoAwesome, contentDescription = null,
-                                tint = AccentGreen, modifier = Modifier.size(13.dp))
-                        }
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "AI Insight: Slight delay on Strategy Audit due to unplanned syncs this morning.",
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                color = MaterialTheme.colorScheme.onSurface)
-                        )
-                    }
-                    if (insight.recoveryPlan != null) {
-                        Spacer(Modifier.height(6.dp))
-                        Text("Recovery plan: ${insight.recoveryPlan}",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontWeight = FontWeight.Normal))
-                    }
-                }
+        if (weeklyInsightEnabled) {
+            val insight = when {
+                !cerebrasConfigured -> AiInsight(
+                    insightText = "Add your Cerebras API key in Settings to get weekly goal coaching.",
+                    boldPart = "Connect Cerebras",
+                )
+                else -> weeklyInsight
             }
+            WeeklyGoalsInsightCard(
+                insight = insight,
+                expanded = weeklyInsightExpanded,
+                onExpandedChange = onWeeklyInsightExpandedChange,
+                onRegenerate = if (cerebrasConfigured) onRegenerateWeeklyInsight else null,
+                isRegenerating = weeklyInsightLoading,
+                showRegenerate = cerebrasConfigured,
+            )
+            Spacer(Modifier.height(10.dp))
         }
 
         // Goals list (animated collapse)
@@ -255,7 +273,9 @@ private fun TodayScheduleSection(
     events: List<com.dailycurator.data.model.ScheduleEvent>,
     activeTab: ScheduleTab,
     onTabChange: (ScheduleTab) -> Unit,
-    dateLabel: String
+    dateLabel: String,
+    windowStart: LocalTime,
+    windowEnd: LocalTime,
 ) {
     Column(modifier = Modifier.padding(horizontal = 20.dp)) {
         Text("TODAY",
@@ -298,101 +318,17 @@ private fun TodayScheduleSection(
         // Timeline or Clock
         Crossfade(targetState = activeTab, label = "schedule_tab") { tab ->
             when (tab) {
-                ScheduleTab.TIMELINE -> TimelineView(events = events)
-                ScheduleTab.CLOCK    -> ClockView(events = events)
-            }
-        }
-    }
-}
-
-// ── Timeline View with live "NOW" indicator ────────────────────────────────
-
-@Composable
-private fun TimelineView(events: List<com.dailycurator.data.model.ScheduleEvent>) {
-    // Refresh current time every minute
-    var now by remember { mutableStateOf(LocalTime.now()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(60_000L)
-            now = LocalTime.now()
-        }
-    }
-    val fmt = DateTimeFormatter.ofPattern("HH:mm")
-
-    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-        // Track whether we've already shown the now-marker
-        var nowInserted = false
-
-        // Show NOW at the very top if it's before all events
-        if (events.isNotEmpty() && now.isBefore(events.first().startTime)) {
-            NowMarker(now = now, fmt = fmt)
-            nowInserted = true
-        }
-
-        events.forEachIndexed { index, event ->
-            // Insert NOW between events if it falls in this gap
-            if (!nowInserted && now.isAfter(event.endTime)) {
-                val nextEvent = events.getOrNull(index + 1)
-                if (nextEvent == null || now.isBefore(nextEvent.startTime)) {
-                    NowMarker(now = now, fmt = fmt)
-                    nowInserted = true
-                }
-            }
-            // Insert NOW if it's currently during this event
-            if (!nowInserted && now.isAfter(event.startTime) && now.isBefore(event.endTime)) {
-                NowMarker(now = now, fmt = fmt)
-                nowInserted = true
-            }
-
-            Row(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
-                Text(event.startTime.format(fmt),
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant),
-                    modifier = Modifier.width(48.dp).padding(top = 10.dp))
-                Spacer(Modifier.width(8.dp))
-                TimelineEventCard(event = event, modifier = Modifier.weight(1f))
-            }
-        }
-
-        // Show NOW after all events have passed
-        if (!nowInserted && events.isNotEmpty() && now.isAfter(events.last().endTime)) {
-            NowMarker(now = now, fmt = fmt)
-        }
-    }
-}
-
-@Composable
-private fun NowMarker(now: LocalTime, fmt: DateTimeFormatter) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Time pill badge
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(NowRed)
-                .padding(horizontal = 8.dp, vertical = 4.dp)
-        ) {
-            Text(
-                now.format(fmt),
-                style = MaterialTheme.typography.labelSmall.copy(
-                    color = Color.White,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 0.5.sp
+                ScheduleTab.TIMELINE -> ScheduleTimelineView(
+                    events = events,
+                    windowStart = windowStart,
+                    windowEnd = windowEnd,
                 )
-            )
+                ScheduleTab.CLOCK -> ClockView(
+                    events = events,
+                    windowStart = windowStart,
+                    windowEnd = windowEnd,
+                )
+            }
         }
-        Spacer(Modifier.width(8.dp))
-        NowIndicator(modifier = Modifier.weight(1f))
-        // Red dot at the end
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .clip(androidx.compose.foundation.shape.CircleShape)
-                .background(NowRed)
-        )
     }
 }

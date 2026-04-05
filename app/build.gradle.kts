@@ -85,6 +85,7 @@ dependencies {
     kapt(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
     implementation(libs.gson)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("ai.koog:koog-agents:0.7.1")
     implementation("ai.koog:agents-core:0.7.1")
     implementation("ai.koog:prompt-executor-model:0.7.1")

@@ -2,9 +2,13 @@ package com.dailycurator.ui.screens.today
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.dailycurator.data.local.AppPreferences
 import com.dailycurator.data.model.*
 import com.dailycurator.data.repository.GoalRepository
+import com.dailycurator.data.repository.HabitRepository
+import com.dailycurator.data.repository.InsightCacheRepository
 import com.dailycurator.data.repository.TaskRepository
+import com.dailycurator.data.repository.toAiInsight
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -16,13 +20,23 @@ data class TodayUiState(
     val tasks: List<PriorityTask> = emptyList(),
     val goals: List<WeeklyGoal> = emptyList(),
     val scheduleEvents: List<ScheduleEvent> = emptyList(),
-    val insight: AiInsight = AiInsight(
-        insightText = "Today's focus on Strategy Audit will put you ahead of schedule for the Q3 release. Keep this momentum.",
-        boldPart = "You've crushed 85% of your deep work this week.",
-        recoveryPlan = "Focus on the 90m Deep Work block tomorrow morning to catch up on documentation tasks."
+    val assistantInsight: AiInsight = AiInsight(
+        insightText = "Insights will appear here after the first daily generation.",
+        boldPart = "Assistant insight",
+    ),
+    val weeklyGoalsInsight: AiInsight = AiInsight(
+        insightText = "Weekly goal coaching will appear after generation.",
+        boldPart = "Weekly focus",
     ),
     val goalsCollapsed: Boolean = false,
-    val scheduleTab: ScheduleTab = ScheduleTab.TIMELINE
+    val scheduleTab: ScheduleTab = ScheduleTab.TIMELINE,
+    val assistantInsightEnabled: Boolean = true,
+    val weeklyGoalsInsightEnabled: Boolean = true,
+    val cerebrasConfigured: Boolean = false,
+    val assistantInsightLoading: Boolean = false,
+    val weeklyGoalsInsightLoading: Boolean = false,
+    val dayWindowStart: LocalTime = LocalTime.of(4, 0),
+    val dayWindowEnd: LocalTime = LocalTime.of(22, 0),
 )
 
 enum class ScheduleTab { TIMELINE, CLOCK }
@@ -30,7 +44,10 @@ enum class ScheduleTab { TIMELINE, CLOCK }
 @HiltViewModel
 class TodayViewModel @Inject constructor(
     private val taskRepo: TaskRepository,
-    private val goalRepo: GoalRepository
+    private val goalRepo: GoalRepository,
+    private val habitRepo: HabitRepository,
+    private val insightRepo: InsightCacheRepository,
+    private val prefs: AppPreferences,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TodayUiState())
@@ -50,6 +67,64 @@ class TodayViewModel @Inject constructor(
                 _uiState.update { it.copy(goals = goals) }
             }
         }
+        viewModelScope.launch {
+            prefs.assistantInsightEnabledFlow.collect { enabled ->
+                _uiState.update { it.copy(assistantInsightEnabled = enabled) }
+            }
+        }
+        viewModelScope.launch {
+            prefs.weeklyGoalsInsightEnabledFlow.collect { enabled ->
+                _uiState.update { it.copy(weeklyGoalsInsightEnabled = enabled) }
+            }
+        }
+        viewModelScope.launch {
+            prefs.cerebrasKeyPresentFlow.collect { ok ->
+                _uiState.update { it.copy(cerebrasConfigured = ok) }
+            }
+        }
+        viewModelScope.launch {
+            insightRepo.observeAssistant().collect { entity ->
+                _uiState.update {
+                    it.copy(assistantInsight = entity?.toAiInsight() ?: it.assistantInsight)
+                }
+            }
+        }
+        viewModelScope.launch {
+            insightRepo.observeWeeklyGoals().collect { entity ->
+                _uiState.update {
+                    it.copy(weeklyGoalsInsight = entity?.toAiInsight() ?: it.weeklyGoalsInsight)
+                }
+            }
+        }
+        viewModelScope.launch {
+            prefs.dayWindowFlow.collect { w ->
+                _uiState.update {
+                    it.copy(
+                        dayWindowStart = dayWindowMinutesToLocalTime(w.startMinute),
+                        dayWindowEnd = dayWindowMinutesToLocalTime(w.endMinute),
+                    )
+                }
+            }
+        }
+        viewModelScope.launch {
+            insightRepo.ensureAssistantForTodayIfNeeded()
+        }
+        viewModelScope.launch {
+            insightRepo.ensureWeeklyGoalsForTodayIfNeeded()
+        }
+    }
+
+    fun regenerateAssistantInsight() = viewModelScope.launch {
+        _uiState.update { it.copy(assistantInsightLoading = true) }
+        val result = insightRepo.regenerateAssistant()
+        _uiState.update { it.copy(assistantInsightLoading = false) }
+        result.onFailure { /* UI can observe stale state; optional snackbar via effect */ }
+    }
+
+    fun regenerateWeeklyGoalsInsight() = viewModelScope.launch {
+        _uiState.update { it.copy(weeklyGoalsInsightLoading = true) }
+        insightRepo.regenerateWeeklyGoals()
+        _uiState.update { it.copy(weeklyGoalsInsightLoading = false) }
     }
 
     fun toggleTaskDone(task: PriorityTask) = viewModelScope.launch { taskRepo.toggleDone(task) }
@@ -80,6 +155,11 @@ class TodayViewModel @Inject constructor(
         goalRepo.insert(WeeklyGoal(title = title, weekStart = weekStart))
     }
 
+    private fun dayWindowMinutesToLocalTime(minuteOfDay: Int): LocalTime {
+        val c = minuteOfDay.coerceIn(0, 24 * 60 - 1)
+        return LocalTime.of(c / 60, c % 60)
+    }
+
     private fun List<PriorityTask>.toScheduleEvents(): List<ScheduleEvent> = map { task ->
         ScheduleEvent(
             id = task.id, title = task.title,
@@ -92,4 +172,3 @@ class TodayViewModel @Inject constructor(
         )
     }
 }
-

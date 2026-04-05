@@ -6,10 +6,12 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.dailycurator.data.local.dao.CachedInsightDao
 import com.dailycurator.data.local.dao.ChatMessageDao
 import com.dailycurator.data.local.dao.GoalDao
 import com.dailycurator.data.local.dao.HabitDao
 import com.dailycurator.data.local.dao.TaskDao
+import com.dailycurator.data.local.entity.CachedInsightEntity
 import com.dailycurator.data.local.entity.ChatMessageEntity
 import com.dailycurator.data.local.entity.GoalEntity
 import com.dailycurator.data.local.entity.HabitEntity
@@ -21,8 +23,11 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 @Database(
-    entities = [TaskEntity::class, HabitEntity::class, GoalEntity::class, ChatMessageEntity::class],
-    version = 4,
+    entities = [
+        TaskEntity::class, HabitEntity::class, GoalEntity::class, ChatMessageEntity::class,
+        CachedInsightEntity::class,
+    ],
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -30,6 +35,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun habitDao(): HabitDao
     abstract fun goalDao(): GoalDao
     abstract fun chatMessageDao(): ChatMessageDao
+    abstract fun cachedInsightDao(): CachedInsightDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
@@ -50,10 +56,27 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `cached_insights` (
+                        `type` TEXT NOT NULL PRIMARY KEY,
+                        `dayKey` TEXT NOT NULL,
+                        `generatedAtEpochMillis` INTEGER NOT NULL,
+                        `insightText` TEXT NOT NULL,
+                        `boldPart` TEXT NOT NULL,
+                        `recoveryPlan` TEXT
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 Room.databaseBuilder(context, AppDatabase::class.java, "daily_curator.db")
-                    .addMigrations(MIGRATION_3_4)
+                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5)
                     .fallbackToDestructiveMigration()
                     .addCallback(object : Callback() {
                         override fun onCreate(db: SupportSQLiteDatabase) {

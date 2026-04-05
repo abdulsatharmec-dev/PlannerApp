@@ -2,15 +2,15 @@ package com.dailycurator.ui.screens.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import ai.koog.agents.core.agent.AIAgent
-import ai.koog.prompt.executor.clients.openai.OpenAIClientSettings
-import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
-import ai.koog.prompt.executor.llms.SingleLLMPromptExecutor
-import ai.koog.prompt.llm.LLMCapability
-import ai.koog.prompt.llm.LLModel
-import ai.koog.prompt.llm.LLMProvider
+import com.dailycurator.data.chat.ChatToolExecutor
+import com.dailycurator.data.chat.PendingChatDeletion
+import com.dailycurator.data.chat.ToolCallEnvelope
+import com.dailycurator.data.chat.cerebrasChatToolDefinitions
 import com.dailycurator.data.local.AppPreferences
 import com.dailycurator.data.local.entity.ChatMessageEntity
+import com.dailycurator.data.remote.CerebrasApiException
+import com.dailycurator.data.remote.CerebrasChatMessage
+import com.dailycurator.data.remote.CerebrasRestClient
 import com.dailycurator.data.repository.ChatRepository
 import com.dailycurator.data.repository.GoalRepository
 import com.dailycurator.data.repository.HabitRepository
@@ -31,7 +31,6 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
-import kotlin.time.ExperimentalTime
 
 data class ChatMessage(
     val id: Long,
@@ -47,6 +46,8 @@ class ChatViewModel @Inject constructor(
     private val goalRepository: GoalRepository,
     private val chatRepository: ChatRepository,
     private val prefs: AppPreferences,
+    private val cerebras: CerebrasRestClient,
+    private val toolExecutor: ChatToolExecutor,
 ) : ViewModel() {
 
     val messages = chatRepository.observeMessages()
@@ -56,14 +57,8 @@ class ChatViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
 
-    private var agent: AIAgent<String, String>? = null
-
-    init {
-        setupAgent()
-    }
-
-    private var lastUsedKey: String? = null
-    private var lastUsedModelId: String? = null
+    private val _pendingDeletion = MutableStateFlow<PendingChatDeletion?>(null)
+    val pendingDeletion = _pendingDeletion.asStateFlow()
 
     /** Bumped on [clearChat] so in-flight replies are not written after history is cleared. */
     private var chatSession: Int = 0
@@ -71,56 +66,54 @@ class ChatViewModel @Inject constructor(
     fun clearChat() {
         chatSession++
         _isLoading.value = false
+        _pendingDeletion.value = null
         viewModelScope.launch {
             chatRepository.clearAll()
         }
     }
 
-    @OptIn(ExperimentalTime::class)
-    private fun setupAgent() {
-        val apiKey = prefs.getCerebrasKey()
-        val modelId = prefs.getCerebrasModelId()
-        if (apiKey.isBlank()) {
-            agent = null
-            lastUsedKey = null
-            lastUsedModelId = null
-            return
+    fun dismissPendingDeletion() {
+        _pendingDeletion.value = null
+    }
+
+    fun confirmPendingDeletion() = viewModelScope.launch {
+        val sessionAt = chatSession
+        when (val p = _pendingDeletion.value) {
+            null -> return@launch
+            is PendingChatDeletion.Task -> {
+                val t = taskRepository.getById(p.id)
+                if (t != null) taskRepository.delete(t)
+                if (sessionAt == chatSession) {
+                    chatRepository.appendMessage("Deleted task \"${p.title}\".", false)
+                }
+            }
+            is PendingChatDeletion.Goal -> {
+                val g = goalRepository.getById(p.id)
+                if (g != null) goalRepository.delete(g)
+                if (sessionAt == chatSession) {
+                    chatRepository.appendMessage("Deleted goal \"${p.title}\".", false)
+                }
+            }
+            is PendingChatDeletion.Habit -> {
+                val h = habitRepository.getById(p.id)
+                if (h != null) habitRepository.delete(h)
+                if (sessionAt == chatSession) {
+                    chatRepository.appendMessage("Deleted habit \"${p.title}\".", false)
+                }
+            }
         }
-
-        if (apiKey == lastUsedKey && modelId == lastUsedModelId && agent != null) return
-
-        val client = OpenAILLMClient(
-            apiKey = apiKey,
-            settings = OpenAIClientSettings(baseUrl = "https://api.cerebras.ai"),
-        )
-        val executor = SingleLLMPromptExecutor(client)
-        val model = LLModel(
-            provider = LLMProvider.OpenAI,
-            id = modelId,
-            capabilities = listOf(
-                LLMCapability.Completion,
-                LLMCapability.OpenAIEndpoint.Completions,
-            ),
-            contextLength = 8096L,
-            maxOutputTokens = null,
-        )
-
-        agent = AIAgent(promptExecutor = executor, llmModel = model)
-        lastUsedKey = apiKey
-        lastUsedModelId = modelId
+        _pendingDeletion.value = null
     }
 
     fun sendMessage(text: String) {
         if (text.isBlank() || _isLoading.value) return
-
-        setupAgent()
 
         val sessionAtSend = chatSession
         viewModelScope.launch {
             chatRepository.appendMessage(text, true)
             if (sessionAtSend != chatSession) return@launch
 
-            if (agent == null) {
+            if (prefs.getCerebrasKey().isBlank()) {
                 chatRepository.appendMessage(
                     "Please set your Cerebras API Key in Settings to chat.",
                     false,
@@ -130,20 +123,7 @@ class ChatViewModel @Inject constructor(
 
             _isLoading.value = true
             try {
-                val context = buildContext()
-                if (sessionAtSend != chatSession) return@launch
-                val prompt = """
-                    Current Context:
-                    $context
-
-                    User: $text
-                """.trimIndent()
-
-                val response = withContext(Dispatchers.IO) {
-                    agent?.run(prompt) ?: "Error: Agent not initialized properly."
-                }
-                if (sessionAtSend != chatSession) return@launch
-                chatRepository.appendMessage(response, false)
+                runChatTurn(sessionAtSend)
             } catch (e: Exception) {
                 if (sessionAtSend != chatSession) return@launch
                 chatRepository.appendMessage(
@@ -158,10 +138,111 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    private suspend fun runChatTurn(sessionAtSend: Int) {
+        val tools = cerebrasChatToolDefinitions()
+        val apiMessages = mutableListOf<CerebrasChatMessage>()
+        apiMessages.add(
+            CerebrasChatMessage(
+                role = "system",
+                content = buildString {
+                    appendLine("You are Daily Curator, a planner assistant with tools to create/update tasks, weekly goals, and habits.")
+                    appendLine("Use tools when the user wants changes. Reference ids from the data snapshot below.")
+                    appendLine("For delete_task, delete_goal, or delete_habit: the app will ask the user to confirm — tell them to use the confirmation bar.")
+                    appendLine("After tools succeed, reply briefly in natural language confirming what changed.")
+                    appendLine()
+                    append(buildContext())
+                },
+            ),
+        )
+
+        val recent = chatRepository.getRecentAscending(40)
+        recent.forEach { e ->
+            apiMessages.add(
+                CerebrasChatMessage(
+                    role = if (e.isUser) "user" else "assistant",
+                    content = e.content,
+                ),
+            )
+        }
+
+        var iterations = 0
+        while (iterations++ < 10) {
+            if (sessionAtSend != chatSession) return
+
+            val completion = withContext(Dispatchers.IO) {
+                cerebras.chatCompletion(
+                    messages = apiMessages,
+                    tools = tools,
+                    toolChoice = "auto",
+                    temperature = 0.3,
+                    maxTokens = 2048,
+                )
+            }
+            if (sessionAtSend != chatSession) return
+
+            val choiceMsg = completion.message
+                ?: throw CerebrasApiException("Empty completion")
+
+            val toolCalls = choiceMsg.toolCalls
+            if (!toolCalls.isNullOrEmpty()) {
+                apiMessages.add(
+                    CerebrasChatMessage(
+                        role = "assistant",
+                        content = choiceMsg.content,
+                        toolCalls = toolCalls,
+                    ),
+                )
+                for (tc in toolCalls) {
+                    if (sessionAtSend != chatSession) return
+                    when (
+                        val env = toolExecutor.execute(
+                            tc.functionName,
+                            tc.argumentsJson,
+                            tc.id,
+                        )
+                    ) {
+                        is ToolCallEnvelope.Done -> {
+                            apiMessages.add(
+                                CerebrasChatMessage(
+                                    role = "tool",
+                                    content = env.content,
+                                    toolCallId = env.toolCallId,
+                                ),
+                            )
+                        }
+                        is ToolCallEnvelope.AwaitDeleteConfirmation -> {
+                            _pendingDeletion.value = env.deletion
+                            val label = when (val d = env.deletion) {
+                                is PendingChatDeletion.Task -> "task \"${d.title}\""
+                                is PendingChatDeletion.Goal -> "goal \"${d.title}\""
+                                is PendingChatDeletion.Habit -> "habit \"${d.title}\""
+                            }
+                            chatRepository.appendMessage(
+                                "I'm ready to delete $label. Confirm or cancel using the bar below.",
+                                false,
+                            )
+                            return
+                        }
+                    }
+                }
+                continue
+            }
+
+            val finalText = choiceMsg.content?.trim().orEmpty()
+            if (finalText.isNotEmpty()) {
+                chatRepository.appendMessage(finalText, false)
+            } else {
+                chatRepository.appendMessage("(No text response.)", false)
+            }
+            return
+        }
+        chatRepository.appendMessage("Stopped after too many tool steps. Try a simpler request.", false)
+    }
+
     private suspend fun buildContext(): String {
         val now = LocalDateTime.now()
         val today = LocalDate.now()
-        val weekStart = today.minusDays(today.dayOfWeek.value.toLong() % 7)
+        val weekStart = today.minusDays(today.dayOfWeek.value.toLong() - 1)
 
         val tasks = taskRepository.getTasksForDate(today).firstOrNull() ?: emptyList()
         val habits = habitRepository.getHabitsForDate(today).firstOrNull() ?: emptyList()
@@ -172,15 +253,21 @@ class ChatViewModel @Inject constructor(
 
         sb.append("--- TASKS FOR TODAY ---\n")
         if (tasks.isEmpty()) sb.append("None\n")
-        tasks.forEach { sb.append("- [${if (it.isDone) "X" else " "}] ${it.title} (${it.startTime}-${it.endTime}) [Urgency: ${it.urgency}]\n") }
+        tasks.forEach {
+            sb.append("- id=${it.id} [${if (it.isDone) "X" else " "}] ${it.title} (${it.startTime}-${it.endTime}) urgency=${it.urgency} rank=${it.rank}\n")
+        }
 
         sb.append("\n--- HABITS FOR TODAY ---\n")
         if (habits.isEmpty()) sb.append("None\n")
-        habits.forEach { sb.append("- [${if (it.isDone) "X" else " "}] ${it.name} (${it.currentValue}/${it.targetValue} ${it.unit})\n") }
+        habits.forEach {
+            sb.append("- id=${it.id} [${if (it.isDone) "X" else " "}] ${it.name} (${it.currentValue}/${it.targetValue} ${it.unit})\n")
+        }
 
         sb.append("\n--- GOALS FOR THIS WEEK ---\n")
         if (goals.isEmpty()) sb.append("None\n")
-        goals.forEach { sb.append("- [${if (it.isCompleted) "X" else " "}] ${it.title}: ${it.description} (Deadline: ${it.deadline})\n") }
+        goals.forEach {
+            sb.append("- id=${it.id} [${if (it.isCompleted) "X" else " "}] ${it.title}: ${it.description} deadline=${it.deadline}\n")
+        }
 
         return sb.toString()
     }

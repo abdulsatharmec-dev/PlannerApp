@@ -14,23 +14,27 @@ import javax.inject.Singleton
 
 private val DATE_FMT = DateTimeFormatter.ISO_LOCAL_DATE
 
+private fun HabitEntity.toHabit() = Habit(
+    id = id, name = name,
+    category = category,
+    habitType = HabitType.valueOf(habitType),
+    iconEmoji = iconEmoji,
+    currentValue = currentValue, targetValue = targetValue,
+    unit = unit, trigger = trigger, frequency = frequency, streakDays = streakDays,
+    date = LocalDate.parse(date, DATE_FMT),
+    isDone = isDone, doneNote = doneNote,
+)
+
 @Singleton
 class HabitRepository @Inject constructor(private val dao: HabitDao) {
     fun getHabitsForDate(date: LocalDate): Flow<List<Habit>> =
         dao.getHabitsForDate(date.format(DATE_FMT)).map { list ->
-            list.map { e ->
-                Habit(id = e.id, name = e.name,
-                    category = e.category,
-                    habitType = HabitType.valueOf(e.habitType),
-                    iconEmoji = e.iconEmoji,
-                    currentValue = e.currentValue, targetValue = e.targetValue,
-                    unit = e.unit, trigger = e.trigger, frequency = e.frequency, streakDays = e.streakDays,
-                    date = LocalDate.parse(e.date, DATE_FMT),
-                    isDone = e.isDone, doneNote = e.doneNote)
-            }
+            list.map { it.toHabit() }
         }
 
-    suspend fun insert(habit: Habit) = dao.insert(
+    suspend fun getById(id: Long): Habit? = dao.getById(id)?.toHabit()
+
+    suspend fun insert(habit: Habit): Long = dao.insert(
         HabitEntity(id = habit.id, name = habit.name, category = habit.category,
             habitType = habit.habitType.name, iconEmoji = habit.iconEmoji,
             currentValue = habit.currentValue, targetValue = habit.targetValue,

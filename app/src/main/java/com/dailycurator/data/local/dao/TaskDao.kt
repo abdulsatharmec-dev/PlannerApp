@@ -9,6 +9,9 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE date = :date ORDER BY rank ASC")
     fun getTasksForDate(date: String): Flow<List<TaskEntity>>
 
+    @Query("SELECT * FROM tasks WHERE id = :id LIMIT 1")
+    suspend fun getById(id: Long): TaskEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(task: TaskEntity): Long
 

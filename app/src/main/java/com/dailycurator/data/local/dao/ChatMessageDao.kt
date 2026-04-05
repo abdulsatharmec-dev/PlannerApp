@@ -11,6 +11,9 @@ interface ChatMessageDao {
     @Query("SELECT * FROM chat_messages ORDER BY createdAtEpochMillis ASC, id ASC")
     fun observeMessages(): Flow<List<ChatMessageEntity>>
 
+    @Query("SELECT * FROM chat_messages ORDER BY id DESC LIMIT :limit")
+    suspend fun getRecentDesc(limit: Int): List<ChatMessageEntity>
+
     @Insert
     suspend fun insert(entity: ChatMessageEntity): Long
 

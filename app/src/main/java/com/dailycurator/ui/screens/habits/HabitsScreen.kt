@@ -25,6 +25,10 @@ import com.dailycurator.ui.components.HabitCard
 import com.dailycurator.ui.theme.*
 
 import com.dailycurator.data.model.Habit
+import com.dailycurator.ui.components.DurationPresetSelector
+import com.dailycurator.ui.components.NumericTargetStepper
+import com.dailycurator.ui.components.formatDurationMinutes
+import kotlin.math.roundToInt
 
 @Composable
 fun HabitsScreen(viewModel: HabitsViewModel = hiltViewModel()) {
@@ -265,13 +269,17 @@ private fun AddHabitDialog(
 ) {
     var name      by remember { mutableStateOf("") }
     var emoji     by remember { mutableStateOf("⭐") }
-    var target    by remember { mutableStateOf("1") }
+    var targetFloat by remember { mutableStateOf(1f) }
     var unit      by remember { mutableStateOf("times") }
     var category  by remember { mutableStateOf("Physical") }
     var habitType by remember { mutableStateOf(HabitType.BUILDING) }
     var trigger   by remember { mutableStateOf("") }
     var frequency by remember { mutableStateOf("daily") }
     var nameError by remember { mutableStateOf(false) }
+
+    LaunchedEffect(unit) {
+        if (unit == "mins" && targetFloat < 5f) targetFloat = 15f
+    }
 
     val unitOptions = listOf("times", "mins", "hours", "ml", "pages", "custom")
     val defaultCategories = listOf("Physical", "Mental", "Spiritual")
@@ -312,14 +320,40 @@ private fun AddHabitDialog(
                     }
                 }
                 item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = target,
-                            onValueChange = { target = it.filter { c -> c.isDigit() || c == '.' } },
-                            label = { Text("Target") },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
+                    when (unit) {
+                        "mins", "hours" -> {
+                            val selectedMinutes = if (unit == "mins") {
+                                targetFloat.roundToInt().coerceIn(1, 24 * 60)
+                            } else {
+                                (targetFloat * 60f).roundToInt().coerceIn(15, 24 * 60)
+                            }
+                            DurationPresetSelector(
+                                selectedMinutes = selectedMinutes,
+                                onMinutesSelected = { m ->
+                                    targetFloat = if (unit == "mins") m.toFloat() else m / 60f
+                                }
+                            )
+                            val hint = if (unit == "mins") {
+                                "${targetFloat.roundToInt()} minutes total"
+                            } else {
+                                val mins = (targetFloat * 60f).roundToInt()
+                                "${"%.1f".format(targetFloat)} hours (${formatDurationMinutes(mins)})"
+                            }
+                            Text(
+                                hint,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        else -> {
+                            NumericTargetStepper(
+                                value = targetFloat,
+                                onValueChange = { targetFloat = it },
+                                step = 1f,
+                                range = 1f..500f,
+                                label = "Target"
+                            )
+                        }
                     }
                 }
 
@@ -423,7 +457,6 @@ private fun AddHabitDialog(
         confirmButton = {
             Button(onClick = {
                 if (name.isBlank()) { nameError = true; return@Button }
-                val targetFloat = target.toFloatOrNull() ?: 1f
                 onConfirm(
                     name.trim(), 
                     category.trim().ifBlank { "Uncategorized" }, 

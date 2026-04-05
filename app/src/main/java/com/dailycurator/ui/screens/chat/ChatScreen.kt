@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Send
+import com.dailycurator.data.chat.PendingChatDeletion
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -60,6 +61,7 @@ import kotlinx.coroutines.flow.first
 fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val messages by viewModel.messages.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val pendingDeletion by viewModel.pendingDeletion.collectAsState()
     var inputText by remember { mutableStateOf("") }
     var showClearDialog by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
@@ -107,6 +109,40 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 enabled = messages.isNotEmpty() || isLoading,
             ) {
                 Text("New chat")
+            }
+        }
+
+        pendingDeletion?.let { pending ->
+            val label = when (pending) {
+                is PendingChatDeletion.Task -> "Delete task \"${pending.title}\"?"
+                is PendingChatDeletion.Goal -> "Delete goal \"${pending.title}\"?"
+                is PendingChatDeletion.Habit -> "Delete habit \"${pending.title}\"?"
+            }
+            Surface(
+                color = MaterialTheme.colorScheme.errorContainer,
+                tonalElevation = 2.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { viewModel.dismissPendingDeletion() }) {
+                        Text("Cancel")
+                    }
+                    TextButton(onClick = { viewModel.confirmPendingDeletion() }) {
+                        Text("Confirm")
+                    }
+                }
             }
         }
 

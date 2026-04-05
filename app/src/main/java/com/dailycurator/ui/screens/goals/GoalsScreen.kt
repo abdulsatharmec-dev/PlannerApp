@@ -17,8 +17,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.dailycurator.ui.components.DurationPresetSelector
 import com.dailycurator.ui.components.GoalListItem
+import com.dailycurator.ui.components.OutlinedPickerButton
+import com.dailycurator.ui.components.PickDateDialog
+import com.dailycurator.ui.components.formatDurationMinutes
 import com.dailycurator.ui.theme.*
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 @Composable
 fun GoalsScreen(viewModel: GoalsViewModel = hiltViewModel()) {
@@ -78,7 +84,10 @@ fun GoalsScreen(viewModel: GoalsViewModel = hiltViewModel()) {
         
         // Calendar View Integration
         item {
-            GoalsCalendarView(goals = state.pendingGoals + state.completedGoals)
+            GoalsCalendarView(
+                goals = state.pendingGoals + state.completedGoals,
+                weekStart = state.weekStart
+            )
             Spacer(Modifier.height(16.dp))
         }
 
@@ -177,10 +186,20 @@ fun GoalsScreen(viewModel: GoalsViewModel = hiltViewModel()) {
 private fun AddGoalDialog(onDismiss: () -> Unit, onConfirm: (String, String?, String?, String?, String) -> Unit) {
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var deadline by remember { mutableStateOf("") }
-    var timeEstimate by remember { mutableStateOf("") }
+    var deadlineDate by remember { mutableStateOf<LocalDate?>(null) }
+    var showDeadlinePicker by remember { mutableStateOf(false) }
+    var includeTimeEstimate by remember { mutableStateOf(false) }
+    var estimateMinutes by remember { mutableStateOf(60) }
     var category by remember { mutableStateOf("Spiritual") }
     var isError by remember { mutableStateOf(false) }
+    val dateFmt = remember { DateTimeFormatter.ofPattern("EEE, MMM d") }
+
+    PickDateDialog(
+        visible = showDeadlinePicker,
+        initialDate = deadlineDate ?: LocalDate.now(),
+        onDismiss = { showDeadlinePicker = false },
+        onConfirm = { deadlineDate = it }
+    )
 
     val categories = listOf("Spiritual", "Health", "Finance", "Career", "Learning")
 
@@ -203,14 +222,28 @@ private fun AddGoalDialog(onDismiss: () -> Unit, onConfirm: (String, String?, St
                     value = description, onValueChange = { description = it },
                     label = { Text("Description (Optional)") }, modifier = Modifier.fillMaxWidth()
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = deadline, onValueChange = { deadline = it },
-                        label = { Text("Deadline (e.g. Fri)") }, modifier = Modifier.weight(1f)
+                OutlinedPickerButton(
+                    text = deadlineDate?.format(dateFmt) ?: "Pick deadline (optional)",
+                    onClick = { showDeadlinePicker = true }
+                )
+                if (deadlineDate != null) {
+                    TextButton(onClick = { deadlineDate = null }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Clear deadline")
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = includeTimeEstimate, onCheckedChange = { includeTimeEstimate = it })
+                    Text("Time estimate", style = MaterialTheme.typography.bodyMedium)
+                }
+                if (includeTimeEstimate) {
+                    DurationPresetSelector(
+                        selectedMinutes = estimateMinutes,
+                        onMinutesSelected = { estimateMinutes = it }
                     )
-                    OutlinedTextField(
-                        value = timeEstimate, onValueChange = { timeEstimate = it },
-                        label = { Text("Time (e.g. 2h)") }, modifier = Modifier.weight(1f)
+                    Text(
+                        "Stored as: ${formatDurationMinutes(estimateMinutes)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Text("Category", style = MaterialTheme.typography.labelSmall)
@@ -235,7 +268,13 @@ private fun AddGoalDialog(onDismiss: () -> Unit, onConfirm: (String, String?, St
         confirmButton = {
             Button(onClick = {
                 if (title.isBlank()) { isError = true; return@Button }
-                onConfirm(title.trim(), description.takeIf { it.isNotBlank() }, deadline.takeIf { it.isNotBlank() }, timeEstimate.takeIf { it.isNotBlank() }, category)
+                onConfirm(
+                    title.trim(),
+                    description.takeIf { it.isNotBlank() },
+                    deadlineDate?.toString(),
+                    formatDurationMinutes(estimateMinutes).takeIf { includeTimeEstimate },
+                    category
+                )
             }) { Text("Add") }
         },
         dismissButton = {
@@ -245,8 +284,12 @@ private fun AddGoalDialog(onDismiss: () -> Unit, onConfirm: (String, String?, St
 }
 
 @Composable
-private fun GoalsCalendarView(goals: List<com.dailycurator.data.model.WeeklyGoal>) {
-    val days = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+private fun GoalsCalendarView(
+    goals: List<com.dailycurator.data.model.WeeklyGoal>,
+    weekStart: LocalDate
+) {
+    val weekDays = remember(weekStart) { (0L..6L).map { weekStart.plusDays(it) } }
+    val dayLabelFmt = remember { DateTimeFormatter.ofPattern("EEE") }
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -261,10 +304,14 @@ private fun GoalsCalendarView(goals: List<com.dailycurator.data.model.WeeklyGoal
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                days.forEach { day ->
-                    val hasDeadline = goals.any { it.deadline?.contains(day, ignoreCase = true) == true }
+                weekDays.forEach { date ->
+                    val hasDeadline = goals.any { g ->
+                        g.deadline?.let { d ->
+                            runCatching { LocalDate.parse(d) }.getOrNull()
+                        } == date
+                    }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(day.take(1), style = MaterialTheme.typography.labelSmall)
+                        Text(date.format(dayLabelFmt).take(1), style = MaterialTheme.typography.labelSmall)
                         Spacer(Modifier.height(4.dp))
                         Box(
                             modifier = Modifier

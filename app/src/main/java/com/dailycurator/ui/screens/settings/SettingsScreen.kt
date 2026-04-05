@@ -2,35 +2,83 @@ package com.dailycurator.ui.screens.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.dailycurator.data.ai.AiPromptDefaults
 import com.dailycurator.data.local.CerebrasModelOption
-import com.dailycurator.ui.theme.*
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+
+private val sectionGap = 12.dp
+private val horizontalPad = 20.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val isDark by viewModel.isDarkTheme.collectAsState()
+    val assistantInsightEnabled by viewModel.assistantInsightEnabled.collectAsState()
+    val weeklyGoalsInsightEnabled by viewModel.weeklyGoalsInsightEnabled.collectAsState()
+    val assistantInsightPrompt by viewModel.assistantInsightPrompt.collectAsState()
+    val weeklyGoalsInsightPrompt by viewModel.weeklyGoalsInsightPrompt.collectAsState()
     val cerebrasKey by viewModel.cerebrasKey.collectAsState()
     val cerebrasModelId by viewModel.cerebrasModelId.collectAsState()
+
     var modelMenuExpanded by remember { mutableStateOf(false) }
+    var showAssistantPromptDialog by remember { mutableStateOf(false) }
+    var showWeeklyPromptDialog by remember { mutableStateOf(false) }
+
     val catalog = viewModel.cerebrasModelChoices
     val pickerOptions = remember(cerebrasModelId, catalog) {
         buildList {
@@ -44,99 +92,141 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val selectedModelLabel =
         pickerOptions.find { it.modelId == cerebrasModelId }?.displayName ?: cerebrasModelId
 
+    if (showAssistantPromptDialog) {
+        InsightPromptEditorDialog(
+            title = "Assistant insight prompt",
+            initialText = assistantInsightPrompt,
+            defaultText = AiPromptDefaults.ASSISTANT_INSIGHT,
+            onDismiss = { showAssistantPromptDialog = false },
+            onSave = {
+                viewModel.persistAssistantPrompt(it)
+                showAssistantPromptDialog = false
+            },
+        )
+    }
+    if (showWeeklyPromptDialog) {
+        InsightPromptEditorDialog(
+            title = "Weekly goals prompt",
+            initialText = weeklyGoalsInsightPrompt,
+            defaultText = AiPromptDefaults.WEEKLY_GOALS_INSIGHT,
+            onDismiss = { showWeeklyPromptDialog = false },
+            onSave = {
+                viewModel.persistWeeklyGoalsPrompt(it)
+                showWeeklyPromptDialog = false
+            },
+        )
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
-        contentPadding = PaddingValues(bottom = 32.dp)
+        contentPadding = PaddingValues(bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(sectionGap),
     ) {
         item {
-            Text("Settings",
-                style = MaterialTheme.typography.displayLarge.copy(
-                    color = MaterialTheme.colorScheme.onSurface),
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp))
+            Text(
+                "Settings",
+                style = MaterialTheme.typography.displaySmall.copy(
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontWeight = FontWeight.SemiBold,
+                ),
+                modifier = Modifier.padding(horizontal = horizontalPad, vertical = 8.dp),
+            )
         }
+
         item {
-            SettingsGroup(title = "Account") {
-                SettingsRow(icon = Icons.Default.Person, label = "Profile") {}
-                SettingsRow(icon = Icons.Default.Notifications, label = "Notifications") {}
+            SettingsSection(title = "Appearance") {
+                SettingsToggleRow(
+                    icon = if (isDark) Icons.Default.DarkMode else Icons.Default.LightMode,
+                    label = if (isDark) "Dark theme" else "Light theme",
+                    checked = isDark,
+                    onCheckedChange = { viewModel.toggleDarkTheme() },
+                )
             }
         }
+
         item {
-            Spacer(Modifier.height(16.dp))
-            SettingsGroup(title = "AI Assistant") {
-                SettingsRow(icon = Icons.Default.AutoAwesome, label = "AI Preferences") {}
-                SettingsRow(icon = Icons.Default.Psychology, label = "Insight Frequency") {}
-            }
-        }
-        item {
-            Spacer(Modifier.height(16.dp))
-            SettingsGroup(title = "Appearance") {
-                // Dark Theme toggle row
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { viewModel.toggleDarkTheme() }
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            if (isDark) Icons.Default.DarkMode else Icons.Default.LightMode,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        if (isDark) "Dark Theme" else "Light Theme",
-                        style = MaterialTheme.typography.bodyLarge.copy(
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontWeight = FontWeight.Medium),
-                        modifier = Modifier.weight(1f)
+            SettingsSection(title = "Home day window") {
+                val dayWindow by viewModel.dayWindow.collectAsState()
+                var showDayStartPicker by remember { mutableStateOf(false) }
+                var showDayEndPicker by remember { mutableStateOf(false) }
+                val timeFmt = remember { DateTimeFormatter.ofPattern("h:mm a") }
+
+                if (showDayStartPicker) {
+                    DayWindowTimePickerDialog(
+                        title = "Day starts",
+                        initial = minuteOfDayToLocalTime(dayWindow.startMinute),
+                        onDismiss = { showDayStartPicker = false },
+                        onConfirm = {
+                            viewModel.setDayWindowStart(it)
+                            showDayStartPicker = false
+                        },
                     )
-                    Switch(
-                        checked = isDark,
-                        onCheckedChange = { viewModel.toggleDarkTheme() },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                            checkedTrackColor = MaterialTheme.colorScheme.primary
-                        )
+                }
+                if (showDayEndPicker) {
+                    DayWindowTimePickerDialog(
+                        title = "Day ends",
+                        initial = minuteOfDayToLocalTime(dayWindow.endMinute),
+                        onDismiss = { showDayEndPicker = false },
+                        onConfirm = {
+                            viewModel.setDayWindowEnd(it)
+                            showDayEndPicker = false
+                        },
+                    )
+                }
+
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    Text(
+                        "Top progress bar on Home and the schedule timeline/clock use this range.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    SettingsNavRow(
+                        icon = Icons.Default.Schedule,
+                        title = "Day starts",
+                        subtitle = minuteOfDayToLocalTime(dayWindow.startMinute).format(timeFmt),
+                        onClick = { showDayStartPicker = true },
+                    )
+                    HorizontalDivider(Modifier.padding(start = 16.dp))
+                    SettingsNavRow(
+                        icon = Icons.Default.Schedule,
+                        title = "Day ends",
+                        subtitle = minuteOfDayToLocalTime(dayWindow.endMinute).format(timeFmt),
+                        onClick = { showDayEndPicker = true },
                     )
                 }
             }
         }
+
         item {
-            Spacer(Modifier.height(16.dp))
-            SettingsGroup(title = "Cerebras API") {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("API Key", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(8.dp))
+            SettingsSection(title = "Cerebras") {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                    Text(
+                        "API key",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(6.dp))
                     OutlinedTextField(
                         value = cerebrasKey,
                         onValueChange = { viewModel.onCerebrasKeyChange(it) },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Enter your Cerebras key") },
+                        placeholder = { Text("Paste key") },
                         singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
                     )
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(14.dp))
                     Text(
                         "Model",
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(6.dp))
                     ExposedDropdownMenuBox(
                         expanded = modelMenuExpanded,
-                        onExpandedChange = { modelMenuExpanded = it }
+                        onExpandedChange = { modelMenuExpanded = it },
                     ) {
                         OutlinedTextField(
                             modifier = Modifier
@@ -149,11 +239,11 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                                 ExposedDropdownMenuDefaults.TrailingIcon(expanded = modelMenuExpanded)
                             },
                             shape = RoundedCornerShape(12.dp),
-                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
                         )
                         ExposedDropdownMenu(
                             expanded = modelMenuExpanded,
-                            onDismissRequest = { modelMenuExpanded = false }
+                            onDismissRequest = { modelMenuExpanded = false },
                         ) {
                             pickerOptions.forEach { option ->
                                 DropdownMenuItem(
@@ -161,7 +251,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                                     onClick = {
                                         viewModel.onCerebrasModelSelected(option.modelId)
                                         modelMenuExpanded = false
-                                    }
+                                    },
                                 )
                             }
                         }
@@ -170,65 +260,283 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                     Button(
                         onClick = { viewModel.saveCerebrasKey() },
                         modifier = Modifier.align(Alignment.End),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
                     ) {
-                        Text("Save Key")
+                        Text("Save key")
                     }
                 }
             }
         }
+
         item {
-            Spacer(Modifier.height(16.dp))
-            SettingsGroup(title = "Data") {
-                SettingsRow(icon = Icons.Default.Sync, label = "Sync") {}
-                SettingsRow(icon = Icons.Default.Info, label = "About") {}
+            SettingsSection(title = "Home insights") {
+                SettingsToggleRow(
+                    icon = null,
+                    label = "Assistant insight card",
+                    subtitle = "Daily summary on the home screen",
+                    checked = assistantInsightEnabled,
+                    onCheckedChange = { viewModel.setAssistantInsightEnabled(it) },
+                )
+                HorizontalDivider(Modifier.padding(start = 16.dp))
+                SettingsToggleRow(
+                    icon = null,
+                    label = "Weekly goals insight",
+                    subtitle = "Coaching under weekly goals",
+                    checked = weeklyGoalsInsightEnabled,
+                    onCheckedChange = { viewModel.setWeeklyGoalsInsightEnabled(it) },
+                )
+                HorizontalDivider(Modifier.padding(start = 16.dp))
+                SettingsNavRow(
+                    icon = Icons.Default.EditNote,
+                    title = "Assistant system prompt",
+                    subtitle = "Tap to edit · used for future generations",
+                    onClick = { showAssistantPromptDialog = true },
+                )
+                HorizontalDivider(Modifier.padding(start = 16.dp))
+                SettingsNavRow(
+                    icon = Icons.Default.EditNote,
+                    title = "Weekly goals system prompt",
+                    subtitle = "Tap to edit · used for future generations",
+                    onClick = { showWeeklyPromptDialog = true },
+                )
+            }
+        }
+
+        item {
+            SettingsSection(title = "About") {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "Daily Curator",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            "Version 1.0",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-        Text(title.uppercase(),
-            style = MaterialTheme.typography.labelSmall.copy(
+private fun SettingsSection(
+    title: String,
+    content: @Composable () -> Unit,
+) {
+    Column(Modifier.padding(horizontal = horizontalPad)) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleSmall.copy(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.SemiBold))
-        Spacer(Modifier.height(8.dp))
+                fontWeight = FontWeight.SemiBold,
+            ),
+        )
+        Spacer(Modifier.height(6.dp))
         Card(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(0.dp)
-        ) { Column { content() } }
+            elevation = CardDefaults.cardElevation(0.dp),
+        ) {
+            content()
+        }
     }
 }
 
 @Composable
-private fun SettingsRow(icon: ImageVector, label: String, onClick: () -> Unit) {
+private fun SettingsToggleRow(
+    icon: ImageVector?,
+    label: String,
+    subtitle: String? = null,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp),
+            )
+            Spacer(Modifier.width(12.dp))
+        } else {
+            Spacer(Modifier.width(34.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(
+                label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (subtitle != null) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                checkedTrackColor = MaterialTheme.colorScheme.primary,
+            ),
+        )
+    }
+}
+
+@Composable
+private fun SettingsNavRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    showChevron: Boolean = true,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(icon, contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp))
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(22.dp),
+        )
         Spacer(Modifier.width(12.dp))
-        Text(label, style = MaterialTheme.typography.bodyLarge.copy(
-            color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.Medium),
-            modifier = Modifier.weight(1f))
-        Icon(Icons.Default.ChevronRight, contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (showChevron) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
+}
+
+private fun minuteOfDayToLocalTime(minuteOfDay: Int): LocalTime {
+    val c = minuteOfDay.coerceIn(0, 24 * 60 - 1)
+    return LocalTime.of(c / 60, c % 60)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DayWindowTimePickerDialog(
+    title: String,
+    initial: LocalTime,
+    onDismiss: () -> Unit,
+    onConfirm: (LocalTime) -> Unit,
+) {
+    val state = rememberTimePickerState(
+        initialHour = initial.hour,
+        initialMinute = initial.minute,
+        is24Hour = false,
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { TimePicker(state = state) },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(LocalTime.of(state.hour, state.minute)) }) {
+                Text("OK")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun InsightPromptEditorDialog(
+    title: String,
+    initialText: String,
+    defaultText: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit,
+) {
+    var draft by remember { mutableStateOf(initialText) }
+    LaunchedEffect(initialText) {
+        draft = initialText
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title, style = MaterialTheme.typography.titleLarge) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                Text(
+                    "Applies only to new or regenerated insights.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 10,
+                    maxLines = 16,
+                    shape = RoundedCornerShape(12.dp),
+                )
+                Spacer(Modifier.height(8.dp))
+                TextButton(
+                    onClick = { draft = defaultText },
+                    modifier = Modifier.align(Alignment.Start),
+                ) {
+                    Text("Restore default")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(draft) }) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
 }

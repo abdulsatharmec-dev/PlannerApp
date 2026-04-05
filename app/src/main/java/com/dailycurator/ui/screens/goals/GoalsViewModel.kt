@@ -11,6 +11,7 @@ import java.time.LocalDate
 import javax.inject.Inject
 
 data class GoalsUiState(
+    val weekStart: LocalDate = LocalDate.now(),
     val completedGoals: List<WeeklyGoal> = emptyList(),
     val pendingGoals: List<WeeklyGoal> = emptyList()
 ) {
@@ -29,6 +30,7 @@ class GoalsViewModel @Inject constructor(
     val uiState: StateFlow<GoalsUiState> =
         repo.getGoalsForWeek(weekStart).map { goals ->
             GoalsUiState(
+                weekStart = weekStart,
                 completedGoals = goals.filter { it.isCompleted },
                 pendingGoals = goals.filter { !it.isCompleted }
             )

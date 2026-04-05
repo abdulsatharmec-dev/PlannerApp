@@ -24,4 +24,8 @@ class ChatRepository @Inject constructor(private val dao: ChatMessageDao) {
     suspend fun clearAll() {
         dao.deleteAll()
     }
+
+    /** Oldest-first, suitable for LLM context (last [limit] rows). */
+    suspend fun getRecentAscending(limit: Int): List<ChatMessageEntity> =
+        dao.getRecentDesc(limit).reversed()
 }

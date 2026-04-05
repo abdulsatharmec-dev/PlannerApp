@@ -7,9 +7,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -17,16 +19,22 @@ import androidx.compose.ui.unit.sp
 import com.dailycurator.data.model.EventPriority
 import com.dailycurator.data.model.ScheduleEvent
 import com.dailycurator.ui.theme.*
+import java.time.format.DateTimeFormatter
 
 @Composable
-fun TimelineEventCard(event: ScheduleEvent, modifier: Modifier = Modifier) {
+fun TimelineEventCard(
+    event: ScheduleEvent,
+    modifier: Modifier = Modifier,
+    contentAlpha: Float = 1f,
+) {
     val accentColor = when (event.priority) {
         EventPriority.HIGH   -> AccentRed
         EventPriority.MEDIUM -> TimelineBlue
         EventPriority.LOW    -> MaterialTheme.colorScheme.onSurfaceVariant
     }
+    val timeFmt = remember { DateTimeFormatter.ofPattern("h:mm a") }
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().alpha(contentAlpha),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(0.dp)
@@ -49,8 +57,13 @@ fun TimelineEventCard(event: ScheduleEvent, modifier: Modifier = Modifier) {
                             tint = Primary, modifier = Modifier.size(16.dp))
                     }
                 }
+                Text(
+                    "${event.startTime.format(timeFmt)} – ${event.endTime.format(timeFmt)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 event.location?.let {
-                    Spacer(Modifier.height(3.dp))
+                    Spacer(Modifier.height(4.dp))
                     Text(it, style = MaterialTheme.typography.bodySmall)
                 }
                 if (event.tags.isNotEmpty()) {

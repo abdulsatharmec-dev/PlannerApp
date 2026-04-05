@@ -19,29 +19,46 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.dailycurator.data.model.PriorityTask
 import com.dailycurator.data.model.Urgency
+import com.dailycurator.ui.components.DurationPresetSelector
+import com.dailycurator.ui.components.OutlinedPickerButton
+import com.dailycurator.ui.components.PickDateDialog
+import com.dailycurator.ui.components.PickTimeDialog
 import com.dailycurator.ui.components.PriorityItem
+import com.dailycurator.ui.components.formatDurationMinutes
 import com.dailycurator.ui.theme.*
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 
 @Composable
 fun TasksScreen(viewModel: TasksViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     var taskToEdit by remember { mutableStateOf<PriorityTask?>(null) }
+    var showListDatePicker by remember { mutableStateOf(false) }
+    val listDateFmt = remember { DateTimeFormatter.ofPattern("EEE, MMM d") }
+
+    PickDateDialog(
+        visible = showListDatePicker,
+        initialDate = state.listDate,
+        onDismiss = { showListDatePicker = false },
+        onConfirm = { viewModel.setListDate(it) }
+    )
 
     if (showAddDialog || taskToEdit != null) {
         ManageTaskDialog(
             task = taskToEdit,
+            defaultListDate = state.listDate,
             onDismiss = { 
                 showAddDialog = false
                 taskToEdit = null 
             },
-            onConfirm = { title, start, end, urgency, isTop5, note ->
+            onConfirm = { title, date, start, end, urgency, isTop5, note ->
                 if (taskToEdit == null) {
-                    viewModel.addTask(title, start, end, urgency, isTop5, note)
+                    viewModel.addTask(title, date, start, end, urgency, isTop5, note)
                 } else {
-                    viewModel.updateTask(taskToEdit!!, title, start, end, urgency, isTop5, note)
+                    viewModel.updateTask(taskToEdit!!, title, date, start, end, urgency, isTop5, note)
                 }
                 showAddDialog = false
                 taskToEdit = null
@@ -70,6 +87,11 @@ fun TasksScreen(viewModel: TasksViewModel = hiltViewModel()) {
                     "All Tasks",
                     style = MaterialTheme.typography.displayLarge.copy(color = MaterialTheme.colorScheme.onBackground),
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                )
+                OutlinedPickerButton(
+                    text = "Day: ${state.listDate.format(listDateFmt)}",
+                    onClick = { showListDatePicker = true },
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
                 )
             }
             
@@ -136,17 +158,50 @@ fun <T> SwipeToDeleteContainer(
 @Composable
 private fun ManageTaskDialog(
     task: PriorityTask?,
+    defaultListDate: LocalDate,
     onDismiss: () -> Unit,
-    onConfirm: (String, LocalTime, LocalTime, Urgency, Boolean, String?) -> Unit
+    onConfirm: (String, LocalDate, LocalTime, LocalTime, Urgency, Boolean, String?) -> Unit
 ) {
-    var title by remember { mutableStateOf(task?.title ?: "") }
-    var note by remember { mutableStateOf(task?.statusNote ?: "") }
-    val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
-    var startText by remember { mutableStateOf(task?.startTime?.format(timeFmt) ?: "09:00") }
-    var endText by remember { mutableStateOf(task?.endTime?.format(timeFmt) ?: "10:00") }
-    var urgency by remember { mutableStateOf(task?.urgency ?: Urgency.GREEN) }
-    var isTop5 by remember { mutableStateOf(task?.rank == 1) }
+    var title by remember(task?.id) { mutableStateOf(task?.title ?: "") }
+    var note by remember(task?.id) { mutableStateOf(task?.statusNote ?: "") }
+    val dateFmt = DateTimeFormatter.ofPattern("EEE, MMM d")
+    var selectedDate by remember(task?.id, defaultListDate) {
+        mutableStateOf(task?.date ?: defaultListDate)
+    }
+    var startTime by remember(task?.id) {
+        mutableStateOf(task?.startTime ?: LocalTime.of(9, 0))
+    }
+    var durationMinutes by remember(task?.id) {
+        val init = if (task == null) 60
+        else {
+            val m = ChronoUnit.MINUTES.between(task.startTime, task.endTime).toInt()
+            if (m <= 0) 60 else m
+        }
+        mutableStateOf(init)
+    }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+    var urgency by remember(task?.id) { mutableStateOf(task?.urgency ?: Urgency.GREEN) }
+    var isTop5 by remember(task?.id) { mutableStateOf(task?.rank == 1) }
     var titleError by remember { mutableStateOf(false) }
+
+    val endTime = remember(startTime, durationMinutes) {
+        startTime.plusMinutes(durationMinutes.toLong())
+    }
+
+    PickDateDialog(
+        visible = showDatePicker,
+        initialDate = selectedDate,
+        onDismiss = { showDatePicker = false },
+        onConfirm = { selectedDate = it }
+    )
+    PickTimeDialog(
+        visible = showTimePicker,
+        initialTime = startTime,
+        title = "Start time",
+        onDismiss = { showTimePicker = false },
+        onConfirm = { startTime = it }
+    )
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -166,16 +221,23 @@ private fun ManageTaskDialog(
                     label = { Text("Notes / Description") },
                     modifier = Modifier.fillMaxWidth()
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = startText, onValueChange = { startText = it },
-                        label = { Text("Start (HH:mm)") }, modifier = Modifier.weight(1f)
-                    )
-                    OutlinedTextField(
-                        value = endText, onValueChange = { endText = it },
-                        label = { Text("End (HH:mm)") }, modifier = Modifier.weight(1f)
-                    )
-                }
+                OutlinedPickerButton(
+                    text = "Date: ${selectedDate.format(dateFmt)}",
+                    onClick = { showDatePicker = true }
+                )
+                OutlinedPickerButton(
+                    text = "Start: ${startTime.format(DateTimeFormatter.ofPattern("HH:mm"))}",
+                    onClick = { showTimePicker = true }
+                )
+                DurationPresetSelector(
+                    selectedMinutes = durationMinutes,
+                    onMinutesSelected = { durationMinutes = it }
+                )
+                Text(
+                    "Ends at ${endTime.format(DateTimeFormatter.ofPattern("HH:mm"))} (${formatDurationMinutes(durationMinutes)})",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Text("Priority", style = MaterialTheme.typography.labelMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Urgency.values().forEach { u ->
@@ -204,9 +266,15 @@ private fun ManageTaskDialog(
         confirmButton = {
             Button(onClick = {
                 if (title.isBlank()) { titleError = true; return@Button }
-                val start = runCatching { LocalTime.parse(startText, timeFmt) }.getOrElse { LocalTime.of(9, 0) }
-                val end = runCatching { LocalTime.parse(endText, timeFmt) }.getOrElse { start.plusHours(1) }
-                onConfirm(title.trim(), start, end, urgency, isTop5, note.takeIf { it.isNotBlank() })
+                onConfirm(
+                    title.trim(),
+                    selectedDate,
+                    startTime,
+                    endTime,
+                    urgency,
+                    isTop5,
+                    note.takeIf { it.isNotBlank() }
+                )
             }) { Text("Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }

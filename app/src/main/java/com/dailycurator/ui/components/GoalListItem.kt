@@ -17,6 +17,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dailycurator.data.model.WeeklyGoal
 import com.dailycurator.ui.theme.AccentGreen
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+
+private val isoDate: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
+
+fun formatGoalDeadlineForDisplay(deadline: String): String =
+    runCatching { LocalDate.parse(deadline, isoDate).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)) }
+        .getOrElse { deadline }
 
 @Composable
 fun GoalListItem(goal: WeeklyGoal, onToggle: () -> Unit, modifier: Modifier = Modifier) {
@@ -59,7 +68,7 @@ fun GoalListItem(goal: WeeklyGoal, onToggle: () -> Unit, modifier: Modifier = Mo
             )
             val info = buildString {
                 if (goal.category.isNotEmpty()) append(goal.category)
-                if (goal.deadline != null) append(" • Due ${goal.deadline}")
+                if (goal.deadline != null) append(" • Due ${formatGoalDeadlineForDisplay(goal.deadline)}")
                 if (goal.timeEstimate != null) append(" • ${goal.timeEstimate}")
             }
             if (info.isNotBlank()) {
