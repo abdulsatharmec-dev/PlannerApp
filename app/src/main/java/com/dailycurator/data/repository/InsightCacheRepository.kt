@@ -2,6 +2,7 @@ package com.dailycurator.data.repository
 
 import com.dailycurator.data.ai.InsightType
 import com.dailycurator.data.ai.JournalContextFormatter
+import com.dailycurator.data.ai.parseInsightJson
 import com.dailycurator.data.local.AppPreferences
 import com.dailycurator.data.local.dao.CachedInsightDao
 import com.dailycurator.data.local.entity.CachedInsightEntity
@@ -9,7 +10,6 @@ import com.dailycurator.data.model.AiInsight
 import com.dailycurator.data.remote.CerebrasApiException
 import com.dailycurator.data.remote.CerebrasChatMessage
 import com.dailycurator.data.remote.CerebrasRestClient
-import com.google.gson.JsonParser
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
@@ -28,6 +28,7 @@ class InsightCacheRepository @Inject constructor(
     private val habitRepository: HabitRepository,
     private val goalRepository: GoalRepository,
     private val journalRepository: JournalRepository,
+    private val phoneUsageRepository: PhoneUsageRepository,
 ) {
 
     private val assistantMutex = Mutex()
@@ -87,7 +88,14 @@ class InsightCacheRepository @Inject constructor(
         val tasks = taskRepository.getTasksForDate(today).first()
         val habits = habitRepository.getHabitsForDate(today).first()
         val goals = goalRepository.getGoalsForWeek(weekStart).first()
-        val ctx = buildAssistantContext(today, tasks, habits, goals, includeJournal = prefs.isJournalInAssistantInsight())
+        val ctx = buildAssistantContext(
+            today,
+            tasks,
+            habits,
+            goals,
+            includeJournal = prefs.isJournalInAssistantInsight(),
+            includePhoneUsage = prefs.isPhoneUsageInAssistantInsight(),
+        )
         val system = prefs.getAssistantInsightPrompt()
         val content = completeInsightJson(system, ctx)
         val (bold, summary, recovery) = parseInsightJson(content)
@@ -107,7 +115,12 @@ class InsightCacheRepository @Inject constructor(
         val today = LocalDate.now()
         val weekStart = today.minusDays(today.dayOfWeek.value.toLong() - 1)
         val goals = goalRepository.getGoalsForWeek(weekStart).first()
-        val ctx = buildWeeklyGoalsContext(weekStart, goals, includeJournal = prefs.isJournalInWeeklyGoalsInsight())
+        val ctx = buildWeeklyGoalsContext(
+            weekStart,
+            goals,
+            includeJournal = prefs.isJournalInWeeklyGoalsInsight(),
+            includePhoneUsage = prefs.isPhoneUsageInWeeklyGoalsInsight(),
+        )
         val system = prefs.getWeeklyGoalsInsightPrompt()
         val content = completeInsightJson(system, ctx)
         val (bold, summary, recovery) = parseInsightJson(content)
@@ -144,6 +157,7 @@ class InsightCacheRepository @Inject constructor(
         habits: List<com.dailycurator.data.model.Habit>,
         goals: List<com.dailycurator.data.model.WeeklyGoal>,
         includeJournal: Boolean,
+        includePhoneUsage: Boolean,
     ): String {
         val fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
         val time = java.time.LocalDateTime.now().format(fmt)
@@ -176,6 +190,13 @@ class InsightCacheRepository @Inject constructor(
                 appendLine("--- JOURNAL (recent, user-enabled for assistant insight) ---")
                 appendLine(JournalContextFormatter.format(journal))
             }
+            if (includePhoneUsage) {
+                val usage = phoneUsageRepository.buildCompactUsageContextBlock(prefs.getPhoneUsageAiContextDays())
+                if (!usage.isNullOrBlank()) {
+                    appendLine()
+                    append(usage)
+                }
+            }
         }
     }
 
@@ -183,6 +204,7 @@ class InsightCacheRepository @Inject constructor(
         weekStart: LocalDate,
         goals: List<com.dailycurator.data.model.WeeklyGoal>,
         includeJournal: Boolean,
+        includePhoneUsage: Boolean,
     ): String = buildString {
         appendLine("Week starting: $weekStart")
         appendLine("Goals (${goals.size}):")
@@ -199,6 +221,13 @@ class InsightCacheRepository @Inject constructor(
             appendLine("--- JOURNAL (recent, user-enabled for weekly insight) ---")
             appendLine(JournalContextFormatter.format(journal))
         }
+        if (includePhoneUsage) {
+            val usage = phoneUsageRepository.buildCompactUsageContextBlock(prefs.getPhoneUsageWeeklyInsightDays())
+            if (!usage.isNullOrBlank()) {
+                appendLine()
+                append(usage)
+            }
+        }
     }
 }
 
@@ -210,16 +239,3 @@ fun CachedInsightEntity.toAiInsight(): AiInsight = AiInsight(
     insightDayKey = dayKey,
 )
 
-fun parseInsightJson(raw: String): Triple<String, String, String?> {
-    var t = raw.trim()
-    if (t.startsWith("```")) {
-        t = t.removePrefix("```json").removePrefix("```").trim()
-        val endFence = t.lastIndexOf("```")
-        if (endFence >= 0) t = t.substring(0, endFence).trim()
-    }
-    val obj = JsonParser.parseString(t).asJsonObject
-    val bold = obj.get("bold_headline")?.asString?.trim().orEmpty()
-    val summary = obj.get("summary")?.asString?.trim().orEmpty().ifEmpty { t }
-    val recovery = obj.get("recovery_or_strategy")?.asString?.trim()?.takeIf { it.isNotEmpty() }
-    return Triple(bold, summary, recovery)
-}

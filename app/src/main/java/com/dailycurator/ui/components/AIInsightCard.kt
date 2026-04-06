@@ -3,6 +3,7 @@ package com.dailycurator.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -14,8 +15,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ExpandLess
@@ -39,6 +42,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dailycurator.data.model.AiInsight
@@ -169,12 +173,15 @@ fun AIInsightCard(
 @Composable
 fun WeeklyGoalsInsightCard(
     insight: AiInsight,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    expanded: Boolean = true,
-    onExpandedChange: (Boolean) -> Unit = {},
     onRegenerate: (() -> Unit)? = null,
     isRegenerating: Boolean = false,
     showRegenerate: Boolean = true,
+    insightTitle: String = "Weekly goals insight",
+    /** When set, the expanded body scrolls inside this max height (helps long markdown in a scroll parent). */
+    scrollableBodyMaxHeight: Dp? = null,
 ) {
     val timeFmt = rememberInsightTimeFormatter()
     val timeLabel = insight.generatedAtEpochMillis?.let { ms ->
@@ -222,7 +229,7 @@ fun WeeklyGoalsInsightCard(
                         }
                         Spacer(Modifier.size(6.dp))
                         Text(
-                            "Weekly goals insight",
+                            insightTitle,
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -256,7 +263,15 @@ fun WeeklyGoalsInsightCard(
                     )
                 }
                 AnimatedVisibility(visible = expanded) {
-                    Column {
+                    val scroll = rememberScrollState()
+                    val bodyModifier = if (scrollableBodyMaxHeight != null) {
+                        Modifier
+                            .heightIn(max = scrollableBodyMaxHeight)
+                            .verticalScroll(scroll)
+                    } else {
+                        Modifier
+                    }
+                    Column(modifier = bodyModifier) {
                         Spacer(Modifier.height(6.dp))
                         if (insight.boldPart.isNotEmpty()) {
                             Text(

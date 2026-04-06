@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Psychology
 
 sealed class Screen(val route: String, val label: String, val icon: ImageVector) {
@@ -25,6 +26,7 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
     object Settings: Screen("settings", "Settings", Icons.Default.Settings)
     object GmailMailboxSummary : Screen("gmail_mailbox_summary", "Gmail summary", Icons.Default.Email)
     object AgentMemory : Screen("agent_memory", "Memory", Icons.Default.Psychology)
+    object PhoneUsage : Screen("phone_usage", "Phone usage", Icons.Default.PhoneAndroid)
 }
 
 val bottomNavItems = listOf(Screen.Today, Screen.Tasks, Screen.Habits, Screen.Goals, Screen.Chat)

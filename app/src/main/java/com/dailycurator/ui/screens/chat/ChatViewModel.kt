@@ -18,6 +18,7 @@ import com.dailycurator.data.repository.ChatRepository
 import com.dailycurator.data.repository.GoalRepository
 import com.dailycurator.data.repository.HabitRepository
 import com.dailycurator.data.repository.JournalRepository
+import com.dailycurator.data.repository.PhoneUsageRepository
 import com.dailycurator.data.repository.TaskRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -54,6 +55,7 @@ class ChatViewModel @Inject constructor(
     private val cerebras: CerebrasRestClient,
     private val toolExecutor: ChatToolExecutor,
     private val agentMemoryRepository: AgentMemoryRepository,
+    private val phoneUsageRepository: PhoneUsageRepository,
 ) : ViewModel() {
 
     val messages = chatRepository.observeMessages()
@@ -188,6 +190,7 @@ class ChatViewModel @Inject constructor(
                     appendLine("You are Daily Curator, a planner assistant with tools to create/update tasks, weekly goals, and habits.")
                     appendLine("If Gmail tools are listed, the user linked Google accounts in Settings. Use them only for real mail; never invent message bodies. Respect read vs send permissions.")
                     appendLine("If a JOURNAL section appears below, the user chose to share excerpts with you — be respectful, avoid quoting long passages, and do not invent journal content.")
+                    appendLine("If a PHONE USAGE section appears, the user opted in — foreground time from Android; session counts are approximate; use for planning/wellbeing context without shaming.")
                     appendLine("Use tools when the user wants changes. Reference ids from the data snapshot below.")
                     appendLine("For delete_task, delete_goal, or delete_habit: the app will ask the user to confirm — tell them to use the confirmation bar.")
                     appendLine("After tools succeed, reply briefly in natural language confirming what changed.")
@@ -320,6 +323,15 @@ class ChatViewModel @Inject constructor(
             sb.append("\n--- JOURNAL (recent, user-enabled for chat) ---\n")
             sb.append(JournalContextFormatter.format(journal))
             sb.append("\n")
+        }
+
+        if (prefs.isPhoneUsageInChatAgent()) {
+            val usage = phoneUsageRepository.buildCompactUsageContextBlock(prefs.getPhoneUsageAiContextDays())
+            if (!usage.isNullOrBlank()) {
+                sb.append("\n")
+                sb.append(usage)
+                sb.append("\n")
+            }
         }
 
         return sb.toString()

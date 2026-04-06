@@ -45,6 +45,21 @@ class SettingsViewModel @Inject constructor(
     val journalInWeeklyGoalsInsight: StateFlow<Boolean> = prefs.journalInWeeklyGoalsInsightFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.isJournalInWeeklyGoalsInsight())
 
+    val phoneUsageInChatAgent: StateFlow<Boolean> = prefs.phoneUsageInChatAgentFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.isPhoneUsageInChatAgent())
+
+    val phoneUsageInAssistantInsight: StateFlow<Boolean> = prefs.phoneUsageInAssistantInsightFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.isPhoneUsageInAssistantInsight())
+
+    val phoneUsageInWeeklyGoalsInsight: StateFlow<Boolean> = prefs.phoneUsageInWeeklyGoalsInsightFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.isPhoneUsageInWeeklyGoalsInsight())
+
+    private val _phoneUsageAiContextDays = MutableStateFlow(prefs.getPhoneUsageAiContextDays())
+    val phoneUsageAiContextDays = _phoneUsageAiContextDays.asStateFlow()
+
+    private val _phoneUsageWeeklyInsightDays = MutableStateFlow(prefs.getPhoneUsageWeeklyInsightDays())
+    val phoneUsageWeeklyInsightDays = _phoneUsageWeeklyInsightDays.asStateFlow()
+
     private val _cerebrasKey = MutableStateFlow(prefs.getCerebrasKey())
     val cerebrasKey = _cerebrasKey.asStateFlow()
 
@@ -56,6 +71,9 @@ class SettingsViewModel @Inject constructor(
 
     private val _weeklyGoalsInsightPrompt = MutableStateFlow(prefs.getWeeklyGoalsInsightPrompt())
     val weeklyGoalsInsightPrompt = _weeklyGoalsInsightPrompt.asStateFlow()
+
+    private val _phoneUsageInsightPrompt = MutableStateFlow(prefs.getPhoneUsageInsightPrompt())
+    val phoneUsageInsightPrompt = _phoneUsageInsightPrompt.asStateFlow()
 
     val gmailAccounts = prefs.gmailAccountsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.getGmailLinkedAccounts())
@@ -121,6 +139,33 @@ class SettingsViewModel @Inject constructor(
     fun persistWeeklyGoalsPrompt(text: String) {
         prefs.setWeeklyGoalsInsightPrompt(text.trim())
         _weeklyGoalsInsightPrompt.value = prefs.getWeeklyGoalsInsightPrompt()
+    }
+
+    fun setPhoneUsageInChatAgent(enabled: Boolean) {
+        prefs.setPhoneUsageInChatAgent(enabled)
+    }
+
+    fun setPhoneUsageInAssistantInsight(enabled: Boolean) {
+        prefs.setPhoneUsageInAssistantInsight(enabled)
+    }
+
+    fun setPhoneUsageInWeeklyGoalsInsight(enabled: Boolean) {
+        prefs.setPhoneUsageInWeeklyGoalsInsight(enabled)
+    }
+
+    fun persistPhoneUsageInsightPrompt(text: String) {
+        prefs.setPhoneUsageInsightPrompt(text.trim())
+        _phoneUsageInsightPrompt.value = prefs.getPhoneUsageInsightPrompt()
+    }
+
+    fun setPhoneUsageAiContextDays(days: Int) {
+        prefs.setPhoneUsageAiContextDays(days)
+        _phoneUsageAiContextDays.value = prefs.getPhoneUsageAiContextDays()
+    }
+
+    fun setPhoneUsageWeeklyInsightDays(days: Int) {
+        prefs.setPhoneUsageWeeklyInsightDays(days)
+        _phoneUsageWeeklyInsightDays.value = prefs.getPhoneUsageWeeklyInsightDays()
     }
 
     fun onCerebrasKeyChange(newKey: String) {

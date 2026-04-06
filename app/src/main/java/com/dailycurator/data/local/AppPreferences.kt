@@ -35,6 +35,13 @@ private const val KEY_HOME_GMAIL_SUMMARY = "home_gmail_summary_enabled"
 private const val KEY_AGENT_MEMORY_ENABLED = "agent_memory_enabled"
 private const val KEY_MEMORY_EXTRACTION_PROMPT = "memory_extraction_prompt"
 private const val KEY_MAILBOX_SUMMARY_RANGE_DAYS = "mailbox_summary_range_days"
+private const val KEY_PHONE_USAGE_INSIGHT_PROMPT = "phone_usage_insight_prompt"
+private const val KEY_PHONE_USAGE_IN_CHAT_AGENT = "phone_usage_in_chat_agent"
+private const val KEY_PHONE_USAGE_IN_ASSISTANT_INSIGHT = "phone_usage_in_assistant_insight"
+private const val KEY_PHONE_USAGE_IN_WEEKLY_GOALS_INSIGHT = "phone_usage_in_weekly_goals_insight"
+private const val KEY_PHONE_USAGE_AI_CONTEXT_DAYS = "phone_usage_ai_context_days"
+private const val KEY_PHONE_USAGE_WEEKLY_INSIGHT_DAYS = "phone_usage_weekly_insight_days"
+private const val KEY_PHONE_USAGE_SCREEN_RANGE_DAYS = "phone_usage_screen_range_days"
 
 /** Minutes from midnight; inclusive schedule / “day” window on the home screen. */
 data class DayWindowMinutes(val startMinute: Int, val endMinute: Int)
@@ -170,6 +177,33 @@ class AppPreferences @Inject constructor(
         }
         prefs.registerOnSharedPreferenceChangeListener(listener)
         trySend(isAgentMemoryEnabled())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val phoneUsageInChatAgentFlow: Flow<Boolean> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_PHONE_USAGE_IN_CHAT_AGENT) trySend(isPhoneUsageInChatAgent())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(isPhoneUsageInChatAgent())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val phoneUsageInAssistantInsightFlow: Flow<Boolean> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_PHONE_USAGE_IN_ASSISTANT_INSIGHT) trySend(isPhoneUsageInAssistantInsight())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(isPhoneUsageInAssistantInsight())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val phoneUsageInWeeklyGoalsInsightFlow: Flow<Boolean> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_PHONE_USAGE_IN_WEEKLY_GOALS_INSIGHT) trySend(isPhoneUsageInWeeklyGoalsInsight())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(isPhoneUsageInWeeklyGoalsInsight())
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }.distinctUntilChanged()
 
@@ -368,5 +402,76 @@ class AppPreferences @Inject constructor(
 
     fun setMailboxSummaryRangeDays(days: Int) {
         prefs.edit().putInt(KEY_MAILBOX_SUMMARY_RANGE_DAYS, days.coerceIn(1, 90)).apply()
+    }
+
+    fun getPhoneUsageInsightPrompt(): String {
+        val raw = prefs.getString(KEY_PHONE_USAGE_INSIGHT_PROMPT, null)?.trim().orEmpty()
+        return raw.ifEmpty { AiPromptDefaults.PHONE_USAGE_INSIGHT }
+    }
+
+    fun setPhoneUsageInsightPrompt(prompt: String) {
+        prefs.edit().putString(KEY_PHONE_USAGE_INSIGHT_PROMPT, prompt).apply()
+    }
+
+    /** When true, AI Agent (chat) system context may include phone usage stats (requires usage access on device). */
+    fun isPhoneUsageInChatAgent(): Boolean =
+        prefs.getBoolean(KEY_PHONE_USAGE_IN_CHAT_AGENT, false)
+
+    fun setPhoneUsageInChatAgent(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_PHONE_USAGE_IN_CHAT_AGENT, enabled).apply()
+    }
+
+    /** When true, home Assistant insight generation may include phone usage stats. */
+    fun isPhoneUsageInAssistantInsight(): Boolean =
+        prefs.getBoolean(KEY_PHONE_USAGE_IN_ASSISTANT_INSIGHT, false)
+
+    fun setPhoneUsageInAssistantInsight(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_PHONE_USAGE_IN_ASSISTANT_INSIGHT, enabled).apply()
+    }
+
+    /** When true, weekly goals insight generation may include phone usage stats. */
+    fun isPhoneUsageInWeeklyGoalsInsight(): Boolean =
+        prefs.getBoolean(KEY_PHONE_USAGE_IN_WEEKLY_GOALS_INSIGHT, false)
+
+    fun setPhoneUsageInWeeklyGoalsInsight(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_PHONE_USAGE_IN_WEEKLY_GOALS_INSIGHT, enabled).apply()
+    }
+
+    /**
+     * Rolling/calendar window for phone usage included in AI Agent chat and Assistant insight.
+     * 1 = since local midnight today; 2+ = last N×24h. Default 1, max 14.
+     */
+    fun getPhoneUsageAiContextDays(): Int =
+        prefs.getInt(KEY_PHONE_USAGE_AI_CONTEXT_DAYS, 1).coerceIn(1, 14)
+
+    fun setPhoneUsageAiContextDays(days: Int) {
+        prefs.edit().putInt(KEY_PHONE_USAGE_AI_CONTEXT_DAYS, days.coerceIn(1, 14)).apply()
+    }
+
+    /**
+     * Window for phone usage in Weekly goals insight. Default 7 days, max 30.
+     */
+    fun getPhoneUsageWeeklyInsightDays(): Int =
+        prefs.getInt(KEY_PHONE_USAGE_WEEKLY_INSIGHT_DAYS, 7).coerceIn(1, 30)
+
+    fun setPhoneUsageWeeklyInsightDays(days: Int) {
+        prefs.edit().putInt(KEY_PHONE_USAGE_WEEKLY_INSIGHT_DAYS, days.coerceIn(1, 30)).apply()
+    }
+
+    /** Phone usage drawer: 1, 7, or 14 days (persisted). */
+    fun getPhoneUsageScreenRangeDays(): Int {
+        val d = prefs.getInt(KEY_PHONE_USAGE_SCREEN_RANGE_DAYS, 1)
+        return when (d) {
+            1, 7, 14 -> d
+            else -> 1
+        }
+    }
+
+    fun setPhoneUsageScreenRangeDays(days: Int) {
+        val v = when (days) {
+            1, 7, 14 -> days
+            else -> 1
+        }
+        prefs.edit().putInt(KEY_PHONE_USAGE_SCREEN_RANGE_DAYS, v).apply()
     }
 }

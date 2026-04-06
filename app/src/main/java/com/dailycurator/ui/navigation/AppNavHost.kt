@@ -48,6 +48,7 @@ import com.dailycurator.ui.screens.habits.HabitsScreen
 import com.dailycurator.ui.screens.journal.JournalEditorScreen
 import com.dailycurator.ui.screens.journal.JournalsScreen
 import com.dailycurator.ui.screens.memory.MemoryManagementScreen
+import com.dailycurator.ui.screens.phoneusage.PhoneUsageScreen
 import com.dailycurator.ui.screens.pomodoro.PomodoroScreen
 import com.dailycurator.ui.screens.settings.SettingsScreen
 import com.dailycurator.ui.screens.tasks.TasksScreen
@@ -59,6 +60,7 @@ private fun subPageTitle(route: String?): String? = when (route) {
     Screen.Journal.route -> "Journal"
     Screen.GmailMailboxSummary.route -> "Gmail Mailbox Summary"
     Screen.AgentMemory.route -> "Memory Management"
+    Screen.PhoneUsage.route -> "Phone usage"
     else -> null
 }
 
@@ -97,6 +99,7 @@ fun AppNavHost(
     val pomodoroDrawerSelected = currentRoute == Screen.Pomodoro.route
     val gmailDrawerSelected = currentRoute == Screen.GmailMailboxSummary.route
     val memoryDrawerSelected = currentRoute == Screen.AgentMemory.route
+    val phoneUsageDrawerSelected = currentRoute == Screen.PhoneUsage.route
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -165,6 +168,21 @@ fun AppNavHost(
                     onClick = {
                         scope.launch { drawerState.close() }
                         navController.navigate(Screen.AgentMemory.route) { launchSingleTop = true }
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                    colors = NavigationDrawerItemDefaults.colors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        selectedTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ),
+                )
+                NavigationDrawerItem(
+                    icon = { Icon(Screen.PhoneUsage.icon, contentDescription = null) },
+                    label = { Text("Phone usage") },
+                    selected = phoneUsageDrawerSelected,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        navController.navigate(Screen.PhoneUsage.route) { launchSingleTop = true }
                     },
                     modifier = Modifier.padding(horizontal = 12.dp),
                     colors = NavigationDrawerItemDefaults.colors(
@@ -319,6 +337,7 @@ fun AppNavHost(
                 composable(Screen.Settings.route) { SettingsScreen() }
                 composable(Screen.GmailMailboxSummary.route) { GmailMailboxSummaryScreen() }
                 composable(Screen.AgentMemory.route) { MemoryManagementScreen() }
+                composable(Screen.PhoneUsage.route) { PhoneUsageScreen() }
             }
         }
     }

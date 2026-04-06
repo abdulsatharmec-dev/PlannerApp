@@ -94,10 +94,17 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val agentMemoryEnabled by viewModel.agentMemoryEnabled.collectAsState()
     val gmailMailboxSummaryPrompt by viewModel.gmailMailboxSummaryPrompt.collectAsState()
     val memoryExtractionPrompt by viewModel.memoryExtractionPrompt.collectAsState()
+    val phoneUsageInChatAgent by viewModel.phoneUsageInChatAgent.collectAsState()
+    val phoneUsageInAssistantInsight by viewModel.phoneUsageInAssistantInsight.collectAsState()
+    val phoneUsageInWeeklyGoalsInsight by viewModel.phoneUsageInWeeklyGoalsInsight.collectAsState()
+    val phoneUsageInsightPrompt by viewModel.phoneUsageInsightPrompt.collectAsState()
+    val phoneUsageAiContextDays by viewModel.phoneUsageAiContextDays.collectAsState()
+    val phoneUsageWeeklyInsightDays by viewModel.phoneUsageWeeklyInsightDays.collectAsState()
 
     var modelMenuExpanded by remember { mutableStateOf(false) }
     var showAssistantPromptDialog by remember { mutableStateOf(false) }
     var showWeeklyPromptDialog by remember { mutableStateOf(false) }
+    var showPhoneUsagePromptDialog by remember { mutableStateOf(false) }
     var showGmailSummaryPromptDialog by remember { mutableStateOf(false) }
     var showMemoryExtractionPromptDialog by remember { mutableStateOf(false) }
     var manualGmailAddress by rememberSaveable { mutableStateOf("") }
@@ -163,6 +170,18 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             onSave = {
                 viewModel.persistMemoryExtractionPrompt(it)
                 showMemoryExtractionPromptDialog = false
+            },
+        )
+    }
+    if (showPhoneUsagePromptDialog) {
+        InsightPromptEditorDialog(
+            title = "Phone usage insight prompt",
+            initialText = phoneUsageInsightPrompt,
+            defaultText = AiPromptDefaults.PHONE_USAGE_INSIGHT,
+            onDismiss = { showPhoneUsagePromptDialog = false },
+            onSave = {
+                viewModel.persistPhoneUsageInsightPrompt(it)
+                showPhoneUsagePromptDialog = false
             },
         )
     }
@@ -376,6 +395,93 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                     title = "Weekly goals system prompt",
                     subtitle = "Tap to edit · used for future generations",
                     onClick = { showWeeklyPromptDialog = true },
+                )
+            }
+        }
+
+        item {
+            SettingsSection(title = "Phone usage & AI") {
+                SettingsToggleRow(
+                    icon = null,
+                    label = "Phone usage in AI Agent",
+                    subtitle = "Adds foreground totals, top apps, and session intervals to chat context. Requires usage access.",
+                    checked = phoneUsageInChatAgent,
+                    onCheckedChange = { viewModel.setPhoneUsageInChatAgent(it) },
+                )
+                HorizontalDivider(Modifier.padding(start = 16.dp))
+                SettingsToggleRow(
+                    icon = null,
+                    label = "Phone usage in Assistant insight",
+                    subtitle = "Home Assistant insight may include the same usage block when it generates",
+                    checked = phoneUsageInAssistantInsight,
+                    onCheckedChange = { viewModel.setPhoneUsageInAssistantInsight(it) },
+                )
+                HorizontalDivider(Modifier.padding(start = 16.dp))
+                SettingsToggleRow(
+                    icon = null,
+                    label = "Phone usage in Weekly goals insight",
+                    subtitle = "Weekly goals coaching may include a separate usage block when it generates",
+                    checked = phoneUsageInWeeklyGoalsInsight,
+                    onCheckedChange = { viewModel.setPhoneUsageInWeeklyGoalsInsight(it) },
+                )
+                HorizontalDivider(Modifier.padding(start = 16.dp))
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                    Text(
+                        "AI Agent & Assistant usage window",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "Default 1 day (since local midnight). Use 2–14 for rolling 24h windows.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = phoneUsageAiContextDays.toString(),
+                        onValueChange = { s ->
+                            val digits = s.filter { it.isDigit() }.take(2)
+                            val n = digits.toIntOrNull()
+                            if (n != null && n in 1..14) viewModel.setPhoneUsageAiContextDays(n)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        shape = RoundedCornerShape(12.dp),
+                    )
+                }
+                HorizontalDivider(Modifier.padding(start = 16.dp))
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                    Text(
+                        "Weekly goals insight usage window",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "Default 7 days (rolling). Range 1–30.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = phoneUsageWeeklyInsightDays.toString(),
+                        onValueChange = { s ->
+                            val digits = s.filter { it.isDigit() }.take(2)
+                            val n = digits.toIntOrNull()
+                            if (n != null && n in 1..30) viewModel.setPhoneUsageWeeklyInsightDays(n)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        shape = RoundedCornerShape(12.dp),
+                    )
+                }
+                HorizontalDivider(Modifier.padding(start = 16.dp))
+                SettingsNavRow(
+                    icon = Icons.Default.EditNote,
+                    title = "Phone usage insight prompt",
+                    subtitle = "System prompt for the Phone usage page summary · future generations only",
+                    onClick = { showPhoneUsagePromptDialog = true },
                 )
             }
         }
