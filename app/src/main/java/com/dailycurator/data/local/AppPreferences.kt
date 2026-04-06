@@ -42,6 +42,7 @@ private const val KEY_PHONE_USAGE_IN_WEEKLY_GOALS_INSIGHT = "phone_usage_in_week
 private const val KEY_PHONE_USAGE_AI_CONTEXT_DAYS = "phone_usage_ai_context_days"
 private const val KEY_PHONE_USAGE_WEEKLY_INSIGHT_DAYS = "phone_usage_weekly_insight_days"
 private const val KEY_PHONE_USAGE_SCREEN_RANGE_DAYS = "phone_usage_screen_range_days"
+private const val KEY_LLM_PROFILES_JSON = "llm_api_key_profiles_json"
 
 /** Minutes from midnight; inclusive schedule / “day” window on the home screen. */
 data class DayWindowMinutes(val startMinute: Int, val endMinute: Int)
@@ -59,6 +60,7 @@ class AppPreferences @Inject constructor(
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private val gmailAccountListType = object : TypeToken<ArrayList<GmailLinkedAccountPref>>() {}.type
+    private val llmProfileListType = object : TypeToken<ArrayList<LlmApiKeyProfile>>() {}.type
 
     /** Emits the current dark-theme value and re-emits whenever it changes. */
     val darkThemeFlow: Flow<Boolean> = callbackFlow {
@@ -88,12 +90,26 @@ class AppPreferences @Inject constructor(
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }.distinctUntilChanged()
 
-    val cerebrasKeyPresentFlow: Flow<Boolean> = callbackFlow {
+    /** True when at least one LLM profile is enabled or a legacy Cerebras key is set. */
+    val llmConfiguredFlow: Flow<Boolean> = callbackFlow {
+        val watchKeys = setOf(KEY_CEREBRAS, KEY_CEREBRAS_MODEL, KEY_LLM_PROFILES_JSON)
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KEY_CEREBRAS) trySend(getCerebrasKey().isNotBlank())
+            if (key in watchKeys) trySend(isLlmConfigured())
         }
         prefs.registerOnSharedPreferenceChangeListener(listener)
-        trySend(getCerebrasKey().isNotBlank())
+        trySend(isLlmConfigured())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    /** @deprecated Prefer [llmConfiguredFlow]; same stream. */
+    val cerebrasKeyPresentFlow: Flow<Boolean> = llmConfiguredFlow
+
+    val llmProfilesFlow: Flow<List<LlmApiKeyProfile>> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_LLM_PROFILES_JSON) trySend(getLlmProfiles())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getLlmProfiles())
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }.distinctUntilChanged()
 
@@ -474,4 +490,43 @@ class AppPreferences @Inject constructor(
         }
         prefs.edit().putInt(KEY_PHONE_USAGE_SCREEN_RANGE_DAYS, v).apply()
     }
+
+    fun getLlmProfiles(): List<LlmApiKeyProfile> {
+        val raw = prefs.getString(KEY_LLM_PROFILES_JSON, null) ?: return emptyList()
+        @Suppress("UNCHECKED_CAST")
+        val parsed = runCatching {
+            gson.fromJson<MutableList<LlmApiKeyProfile>>(raw, llmProfileListType)
+        }.getOrNull()
+        return parsed ?: emptyList()
+    }
+
+    fun setLlmProfiles(profiles: List<LlmApiKeyProfile>) {
+        prefs.edit().putString(KEY_LLM_PROFILES_JSON, gson.toJson(ArrayList(profiles))).apply()
+    }
+
+    /**
+     * OpenAI-compatible endpoints to try in order. Uses enabled profiles when any exist;
+     * otherwise falls back to the legacy single Cerebras key + model.
+     */
+    fun llmEndpointsForFailover(): List<LlmEndpointConfig> {
+        val profiles = getLlmProfiles()
+        if (profiles.isNotEmpty()) {
+            // When any profile exists, only enabled rows are used (no silent legacy mix-in).
+            return profiles.filter { it.enabled }.mapNotNull { it.toEndpointConfig() }
+        }
+        val legacy = getCerebrasKey().trim()
+        if (legacy.isNotEmpty()) {
+            val model = getCerebrasModelId().trim().ifEmpty { DEFAULT_CEREBRAS_MODEL_ID }
+            return listOf(
+                LlmEndpointConfig(
+                    baseUrl = "https://api.cerebras.ai/v1",
+                    apiKey = legacy,
+                    modelId = model,
+                ),
+            )
+        }
+        return emptyList()
+    }
+
+    fun isLlmConfigured(): Boolean = llmEndpointsForFailover().isNotEmpty()
 }

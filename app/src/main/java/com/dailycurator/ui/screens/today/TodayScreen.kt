@@ -86,8 +86,8 @@ fun TodayScreen(
             if (state.assistantInsightEnabled) {
                 val insight = when {
                     !state.cerebrasConfigured -> AiInsight(
-                        insightText = "Add your Cerebras API key in Settings to generate a daily assistant insight from your tasks, goals, and habits.",
-                        boldPart = "Connect Cerebras",
+                        insightText = "Add an LLM API key in Settings to generate a daily assistant insight from your tasks, goals, and habits.",
+                        boldPart = "Connect LLM",
                     )
                     else -> state.assistantInsight
                 }
@@ -182,7 +182,7 @@ fun TodayScreen(
                         Spacer(Modifier.height(8.dp))
                         when {
                             !state.cerebrasConfigured -> Text(
-                                "Add your Cerebras API key in Settings to generate mailbox summaries.",
+                                "Add an LLM API key in Settings to generate mailbox summaries.",
                                 style = MaterialTheme.typography.bodySmall,
                             )
                             state.gmailHomeDigestMarkdown.isBlank() -> Text(
@@ -260,8 +260,8 @@ private fun WeeklyGoalsSection(
         if (weeklyInsightEnabled) {
             val insight = when {
                 !cerebrasConfigured -> AiInsight(
-                    insightText = "Add your Cerebras API key in Settings to get weekly goal coaching.",
-                    boldPart = "Connect Cerebras",
+                    insightText = "Add an LLM API key in Settings to get weekly goal coaching.",
+                    boldPart = "Connect LLM",
                 )
                 else -> weeklyInsight
             }

@@ -9,6 +9,7 @@ import com.dailycurator.data.local.AppPreferences
 import com.dailycurator.data.local.DayWindowMinutes
 import com.dailycurator.data.local.CEREBRAS_MODEL_OPTIONS
 import com.dailycurator.data.local.CerebrasModelOption
+import com.dailycurator.data.local.LlmApiKeyProfile
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -100,6 +101,9 @@ class SettingsViewModel @Inject constructor(
 
     val dayWindow: StateFlow<DayWindowMinutes> = prefs.dayWindowFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.getDayWindow())
+
+    val llmProfiles: StateFlow<List<LlmApiKeyProfile>> = prefs.llmProfilesFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.getLlmProfiles())
 
     fun toggleDarkTheme() = prefs.setDarkTheme(!isDarkTheme.value)
 
@@ -229,5 +233,24 @@ class SettingsViewModel @Inject constructor(
     fun persistMemoryExtractionPrompt(text: String) {
         prefs.setMemoryExtractionPrompt(text.trim())
         _memoryExtractionPrompt.value = prefs.getMemoryExtractionPrompt()
+    }
+
+    fun upsertLlmProfile(profile: LlmApiKeyProfile) {
+        val cur = prefs.getLlmProfiles().toMutableList()
+        val i = cur.indexOfFirst { it.id == profile.id }
+        if (i >= 0) cur[i] = profile else cur.add(profile)
+        prefs.setLlmProfiles(cur)
+    }
+
+    fun removeLlmProfile(id: String) {
+        prefs.setLlmProfiles(prefs.getLlmProfiles().filterNot { it.id == id })
+    }
+
+    fun setLlmProfileEnabled(id: String, enabled: Boolean) {
+        prefs.setLlmProfiles(
+            prefs.getLlmProfiles().map { p ->
+                if (p.id == id) p.copy(enabled = enabled) else p
+            },
+        )
     }
 }

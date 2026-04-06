@@ -33,10 +33,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -67,7 +64,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.dailycurator.data.ai.AiPromptDefaults
 import com.dailycurator.data.gmail.GmailTokenResult
 import com.dailycurator.ui.LocalGmailLinkActions
-import com.dailycurator.data.local.CerebrasModelOption
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
@@ -100,8 +96,9 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val phoneUsageInsightPrompt by viewModel.phoneUsageInsightPrompt.collectAsState()
     val phoneUsageAiContextDays by viewModel.phoneUsageAiContextDays.collectAsState()
     val phoneUsageWeeklyInsightDays by viewModel.phoneUsageWeeklyInsightDays.collectAsState()
+    val llmProfiles by viewModel.llmProfiles.collectAsState()
 
-    var modelMenuExpanded by remember { mutableStateOf(false) }
+    var showLlmKeysDialog by remember { mutableStateOf(false) }
     var showAssistantPromptDialog by remember { mutableStateOf(false) }
     var showWeeklyPromptDialog by remember { mutableStateOf(false) }
     var showPhoneUsagePromptDialog by remember { mutableStateOf(false) }
@@ -112,18 +109,20 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val context = LocalContext.current
     val gmailLinkActions = LocalGmailLinkActions.current
 
-    val catalog = viewModel.cerebrasModelChoices
-    val pickerOptions = remember(cerebrasModelId, catalog) {
-        buildList {
-            addAll(catalog)
-            val known = catalog.map { it.modelId }.toSet()
-            if (cerebrasModelId.isNotBlank() && cerebrasModelId !in known) {
-                add(CerebrasModelOption("Other (saved id)", cerebrasModelId))
-            }
-        }
+    if (showLlmKeysDialog) {
+        LlmApiKeysManageDialog(
+            profiles = llmProfiles,
+            legacyCerebrasKey = cerebrasKey,
+            onLegacyCerebrasKeyChange = { viewModel.onCerebrasKeyChange(it) },
+            legacyCerebrasModelId = cerebrasModelId,
+            onLegacyCerebrasModelSelected = { viewModel.onCerebrasModelSelected(it) },
+            onSaveLegacyCerebras = { viewModel.saveCerebrasKey() },
+            onDismiss = { showLlmKeysDialog = false },
+            onToggleProfileEnabled = { id, en -> viewModel.setLlmProfileEnabled(id, en) },
+            onDeleteProfile = { viewModel.removeLlmProfile(it) },
+            onUpsertProfile = { viewModel.upsertLlmProfile(it) },
+        )
     }
-    val selectedModelLabel =
-        pickerOptions.find { it.modelId == cerebrasModelId }?.displayName ?: cerebrasModelId
 
     if (showAssistantPromptDialog) {
         InsightPromptEditorDialog(
@@ -270,68 +269,20 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
         }
 
         item {
-            SettingsSection(title = "Cerebras") {
+            SettingsSection(title = "Language model (API)") {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                     Text(
-                        "API key",
-                        style = MaterialTheme.typography.labelMedium,
+                        "Add Cerebras or Groq keys with models. When a key hits rate limits (HTTP 429 or 503), the next enabled key is used automatically.",
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.height(6.dp))
-                    OutlinedTextField(
-                        value = cerebrasKey,
-                        onValueChange = { viewModel.onCerebrasKeyChange(it) },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Paste key") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                    )
-                    Spacer(Modifier.height(14.dp))
-                    Text(
-                        "Model",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    ExposedDropdownMenuBox(
-                        expanded = modelMenuExpanded,
-                        onExpandedChange = { modelMenuExpanded = it },
-                    ) {
-                        OutlinedTextField(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor(),
-                            readOnly = true,
-                            value = selectedModelLabel,
-                            onValueChange = {},
-                            trailingIcon = {
-                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = modelMenuExpanded)
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-                        )
-                        ExposedDropdownMenu(
-                            expanded = modelMenuExpanded,
-                            onDismissRequest = { modelMenuExpanded = false },
-                        ) {
-                            pickerOptions.forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(option.displayName) },
-                                    onClick = {
-                                        viewModel.onCerebrasModelSelected(option.modelId)
-                                        modelMenuExpanded = false
-                                    },
-                                )
-                            }
-                        }
-                    }
                     Spacer(Modifier.height(12.dp))
                     Button(
-                        onClick = { viewModel.saveCerebrasKey() },
-                        modifier = Modifier.align(Alignment.End),
+                        onClick = { showLlmKeysDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                     ) {
-                        Text("Save key")
+                        Text("Manage API keys")
                     }
                 }
             }

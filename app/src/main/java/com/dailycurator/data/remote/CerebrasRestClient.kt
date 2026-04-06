@@ -1,6 +1,7 @@
 package com.dailycurator.data.remote
 
 import com.dailycurator.data.local.AppPreferences
+import com.dailycurator.data.local.LlmEndpointConfig
 import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
@@ -45,6 +46,8 @@ data class CerebrasChoiceMessage(
 data class CerebrasCompletionResult(
     val message: CerebrasChoiceMessage?,
     val finishReason: String?,
+    /** From API usage.total_tokens when present. */
+    val totalTokens: Int? = null,
 )
 
 class CerebrasApiException(message: String, val httpCode: Int? = null) : Exception(message)
@@ -68,12 +71,45 @@ class CerebrasRestClient @Inject constructor(
         temperature: Double = 0.4,
         maxTokens: Int = 2048,
     ): CerebrasCompletionResult = withContext(Dispatchers.IO) {
-        val apiKey = prefs.getCerebrasKey().trim()
-        if (apiKey.isEmpty()) throw CerebrasApiException("Cerebras API key is not set.")
+        val endpoints = prefs.llmEndpointsForFailover()
+        if (endpoints.isEmpty()) throw CerebrasApiException("No LLM API key configured.")
 
-        val model = prefs.getCerebrasModelId()
+        var lastError: CerebrasApiException? = null
+        for (endpoint in endpoints) {
+            try {
+                return@withContext executeChatCompletion(
+                    endpoint = endpoint,
+                    messages = messages,
+                    tools = tools,
+                    toolChoice = toolChoice,
+                    temperature = temperature,
+                    maxTokens = maxTokens,
+                )
+            } catch (e: CerebrasApiException) {
+                lastError = e
+                if (shouldFailoverToNextKey(e.httpCode)) continue
+                throw e
+            }
+        }
+        throw lastError ?: CerebrasApiException("All configured LLM keys failed.")
+    }
+
+    private fun shouldFailoverToNextKey(code: Int?): Boolean =
+        when (code) {
+            429, 503 -> true
+            else -> false
+        }
+
+    private fun executeChatCompletion(
+        endpoint: LlmEndpointConfig,
+        messages: List<CerebrasChatMessage>,
+        tools: List<CerebrasToolDefinition>?,
+        toolChoice: String,
+        temperature: Double,
+        maxTokens: Int,
+    ): CerebrasCompletionResult {
         val body = JsonObject().apply {
-            addProperty("model", model)
+            addProperty("model", endpoint.modelId)
             addProperty("temperature", temperature)
             addProperty("max_tokens", maxTokens)
             val arr = JsonArray()
@@ -101,9 +137,10 @@ class CerebrasRestClient @Inject constructor(
             }
         }
 
+        val url = "${endpoint.baseUrl.trimEnd('/')}/chat/completions"
         val req = Request.Builder()
-            .url("https://api.cerebras.ai/v1/chat/completions")
-            .addHeader("Authorization", "Bearer $apiKey")
+            .url(url)
+            .addHeader("Authorization", "Bearer ${endpoint.apiKey}")
             .addHeader("Content-Type", "application/json")
             .post(gson.toJson(body).toRequestBody(JSON_MEDIA))
             .build()
@@ -114,6 +151,10 @@ class CerebrasRestClient @Inject constructor(
                 throw CerebrasApiException("HTTP ${resp.code}: $respBody", resp.code)
             }
             val root = gson.fromJson(respBody, JsonObject::class.java)
+            val usageTotal = root.getAsJsonObject("usage")
+                ?.get("total_tokens")
+                ?.takeUnless { it.isJsonNull }
+                ?.asInt
             val choices = root.getAsJsonArray("choices") ?: throw CerebrasApiException("No choices in response")
             if (choices.size() == 0) throw CerebrasApiException("Empty choices")
             val choice = choices[0].asJsonObject
@@ -130,13 +171,14 @@ class CerebrasRestClient @Inject constructor(
                 val args = fn.get("arguments")?.asString ?: "{}"
                 CerebrasToolCall(id = id, functionName = name, argumentsJson = args)
             }
-            CerebrasCompletionResult(
+            return CerebrasCompletionResult(
                 message = CerebrasChoiceMessage(
                     role = role,
                     content = content,
                     toolCalls = toolCalls?.takeIf { it.isNotEmpty() },
                 ),
                 finishReason = finishReason,
+                totalTokens = usageTotal,
             )
         }
     }

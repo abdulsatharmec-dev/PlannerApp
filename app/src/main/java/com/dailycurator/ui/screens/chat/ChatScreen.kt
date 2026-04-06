@@ -452,12 +452,24 @@ private fun MessageBubble(
                     )
                 }
             }
-            Text(
-                text = message.timestamp.format(DateTimeFormatter.ofPattern("HH:mm")),
-                style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
-                color = colors.metaText,
+            Row(
                 modifier = Modifier.padding(top = 4.dp, start = 6.dp, end = 6.dp),
-            )
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = message.timestamp.format(DateTimeFormatter.ofPattern("HH:mm")),
+                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
+                    color = colors.metaText,
+                )
+                if (!message.isUser && message.totalTokens != null) {
+                    Text(
+                        text = "· ${message.totalTokens} tok",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                        color = colors.metaText.copy(alpha = 0.85f),
+                    )
+                }
+            }
         }
     }
 }

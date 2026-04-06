@@ -153,8 +153,8 @@ class PhoneUsageRepository @Inject constructor(
 
     suspend fun generateUsageInsight(snapshot: PhoneUsageSnapshot): Result<AiInsight> = withContext(Dispatchers.IO) {
         runCatching {
-            if (prefs.getCerebrasKey().isBlank()) {
-                throw IllegalStateException("Set your Cerebras API key in Settings.")
+            if (!prefs.isLlmConfigured()) {
+                throw IllegalStateException("Add an LLM API key in Settings.")
             }
             val userBlock = buildUsageContextForLlm(snapshot)
             val result = cerebras.chatCompletion(

@@ -42,6 +42,7 @@ data class ChatMessage(
     val content: String,
     val isUser: Boolean,
     val timestamp: LocalDateTime,
+    val totalTokens: Int? = null,
 )
 
 @HiltViewModel
@@ -145,9 +146,9 @@ class ChatViewModel @Inject constructor(
             chatRepository.appendMessage(text, true)
             if (sessionAtSend != chatSession) return@launch
 
-            if (prefs.getCerebrasKey().isBlank()) {
+            if (!prefs.isLlmConfigured()) {
                 chatRepository.appendMessage(
-                    "Please set your Cerebras API Key in Settings to chat.",
+                    "Add at least one LLM API key in Settings (Manage API keys) to chat.",
                     false,
                 )
                 return@launch
@@ -215,6 +216,7 @@ class ChatViewModel @Inject constructor(
         }
 
         var iterations = 0
+        var turnTokenTotal = 0
         while (iterations++ < 10) {
             if (sessionAtSend != chatSession) return
 
@@ -227,6 +229,7 @@ class ChatViewModel @Inject constructor(
                     maxTokens = 2048,
                 )
             }
+            completion.totalTokens?.let { turnTokenTotal += it }
             if (sessionAtSend != chatSession) return
 
             val choiceMsg = completion.message
@@ -268,7 +271,8 @@ class ChatViewModel @Inject constructor(
                             }
                             chatRepository.appendMessage(
                                 "I'm ready to delete $label. Confirm or cancel using the bar below.",
-                                false,
+                                isUser = false,
+                                totalTokens = null,
                             )
                             return
                         }
@@ -278,14 +282,19 @@ class ChatViewModel @Inject constructor(
             }
 
             val finalText = choiceMsg.content?.trim().orEmpty()
+            val tokensForBubble = turnTokenTotal.takeIf { it > 0 }
             if (finalText.isNotEmpty()) {
-                chatRepository.appendMessage(finalText, false)
+                chatRepository.appendMessage(finalText, isUser = false, totalTokens = tokensForBubble)
             } else {
-                chatRepository.appendMessage("(No text response.)", false)
+                chatRepository.appendMessage("(No text response.)", isUser = false, totalTokens = tokensForBubble)
             }
             return
         }
-        chatRepository.appendMessage("Stopped after too many tool steps. Try a simpler request.", false)
+        chatRepository.appendMessage(
+            "Stopped after too many tool steps. Try a simpler request.",
+            isUser = false,
+            totalTokens = null,
+        )
     }
 
     private suspend fun buildContext(): String {
@@ -345,5 +354,6 @@ private fun ChatMessageEntity.toChatMessage(): ChatMessage {
         content = content,
         isUser = isUser,
         timestamp = Instant.ofEpochMilli(createdAtEpochMillis).atZone(zone).toLocalDateTime(),
+        totalTokens = totalTokens,
     )
 }

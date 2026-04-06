@@ -60,7 +60,9 @@ class TodayViewModel @Inject constructor(
     private val taskReminderScheduler: TaskReminderScheduler,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(TodayUiState())
+    private val _uiState = MutableStateFlow(
+        TodayUiState(cerebrasConfigured = prefs.isLlmConfigured()),
+    )
     val uiState: StateFlow<TodayUiState> = _uiState.asStateFlow()
 
     private val today = LocalDate.now()
@@ -88,7 +90,7 @@ class TodayViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            prefs.cerebrasKeyPresentFlow.collect { ok ->
+            prefs.llmConfiguredFlow.collect { ok ->
                 _uiState.update { it.copy(cerebrasConfigured = ok) }
             }
         }

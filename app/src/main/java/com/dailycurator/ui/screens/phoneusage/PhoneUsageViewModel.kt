@@ -32,8 +32,8 @@ class PhoneUsageViewModel @Inject constructor(
     private val prefs: AppPreferences,
 ) : ViewModel() {
 
-    val cerebrasKeyPresent: StateFlow<Boolean> = prefs.cerebrasKeyPresentFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.getCerebrasKey().isNotBlank())
+    val llmConfigured: StateFlow<Boolean> = prefs.llmConfiguredFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.isLlmConfigured())
 
     private val _uiState = MutableStateFlow(
         PhoneUsageUiState(rangeDays = prefs.getPhoneUsageScreenRangeDays()),

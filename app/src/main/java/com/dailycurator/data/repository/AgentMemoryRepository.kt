@@ -74,7 +74,7 @@ class AgentMemoryRepository @Inject constructor(
         if (userMsgs.isEmpty()) return emptyList()
 
         val existingRowsEarly = dao.getRecent(40).map { it.content }
-        if (prefs.getCerebrasKey().isBlank()) {
+        if (!prefs.isLlmConfigured()) {
             return mergeProposalCandidates(
                 emptyList(),
                 volunteeredProfileLinesFromUserMessages(userMsgs),

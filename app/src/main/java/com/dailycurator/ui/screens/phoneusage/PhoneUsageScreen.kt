@@ -56,7 +56,7 @@ import com.dailycurator.ui.components.WeeklyGoalsInsightCard
 @Composable
 fun PhoneUsageScreen(viewModel: PhoneUsageViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsState()
-    val cerebrasOk by viewModel.cerebrasKeyPresent.collectAsState()
+    val llmOk by viewModel.llmConfigured.collectAsState()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var usageInsightExpanded by rememberSaveable { mutableStateOf(true) }
@@ -134,9 +134,9 @@ fun PhoneUsageScreen(viewModel: PhoneUsageViewModel = hiltViewModel()) {
                 )
             }
             when {
-                !cerebrasOk -> {
+                !llmOk -> {
                     Text(
-                        "Add a Cerebras API key in Settings to generate a summary.",
+                        "Add an LLM API key in Settings to generate a summary.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

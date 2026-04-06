@@ -55,7 +55,7 @@ fun GmailMailboxSummaryScreen(viewModel: GmailMailboxSummaryViewModel = hiltView
             style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
         )
         Text(
-            "Scans Inbox and Spam for the selected range, then uses your Cerebras model with the prompt from Settings.",
+            "Scans Inbox and Spam for the selected range, then uses your configured LLM with the prompt from Settings.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

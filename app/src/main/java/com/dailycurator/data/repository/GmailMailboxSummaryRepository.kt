@@ -33,8 +33,8 @@ class GmailMailboxSummaryRepository @Inject constructor(
     fun observe(): Flow<CachedInsightEntity?> = dao.observe(InsightType.GMAIL_MAILBOX_SUMMARY)
 
     suspend fun regenerate(rangeDays: Int): Result<Unit> = mutex.withLock {
-        if (prefs.getCerebrasKey().isBlank()) {
-            return@withLock Result.failure(IllegalStateException("Set your Cerebras API key in Settings."))
+        if (!prefs.isLlmConfigured()) {
+            return@withLock Result.failure(IllegalStateException("Add an LLM API key in Settings."))
         }
         val accounts = prefs.getGmailLinkedAccounts().filter { it.showInSummary }
         if (accounts.isEmpty()) {

@@ -9,4 +9,6 @@ data class ChatMessageEntity(
     val content: String,
     val isUser: Boolean,
     val createdAtEpochMillis: Long,
+    /** Total tokens reported by the LLM API for this assistant message (if any). */
+    val totalTokens: Int? = null,
 )

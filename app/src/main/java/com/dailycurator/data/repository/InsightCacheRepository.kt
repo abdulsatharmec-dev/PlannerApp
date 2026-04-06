@@ -40,7 +40,7 @@ class InsightCacheRepository @Inject constructor(
 
     suspend fun ensureAssistantForTodayIfNeeded() {
         if (!prefs.isAssistantInsightEnabled()) return
-        if (prefs.getCerebrasKey().isBlank()) return
+        if (!prefs.isLlmConfigured()) return
         assistantMutex.withLock {
             val dayKey = LocalDate.now().toString()
             val existing = dao.get(InsightType.ASSISTANT)
@@ -53,8 +53,8 @@ class InsightCacheRepository @Inject constructor(
         if (!prefs.isAssistantInsightEnabled()) {
             return@withLock Result.failure(IllegalStateException("Assistant insight is disabled in Settings."))
         }
-        if (prefs.getCerebrasKey().isBlank()) {
-            return@withLock Result.failure(IllegalStateException("Set your Cerebras API key in Settings."))
+        if (!prefs.isLlmConfigured()) {
+            return@withLock Result.failure(IllegalStateException("Add an LLM API key in Settings."))
         }
         val dayKey = LocalDate.now().toString()
         runCatching { generateAssistant(dayKey) }.map { }
@@ -62,7 +62,7 @@ class InsightCacheRepository @Inject constructor(
 
     suspend fun ensureWeeklyGoalsForTodayIfNeeded() {
         if (!prefs.isWeeklyGoalsInsightEnabled()) return
-        if (prefs.getCerebrasKey().isBlank()) return
+        if (!prefs.isLlmConfigured()) return
         weeklyMutex.withLock {
             val dayKey = LocalDate.now().toString()
             val existing = dao.get(InsightType.WEEKLY_GOALS)
@@ -75,8 +75,8 @@ class InsightCacheRepository @Inject constructor(
         if (!prefs.isWeeklyGoalsInsightEnabled()) {
             return@withLock Result.failure(IllegalStateException("Weekly goals insight is disabled in Settings."))
         }
-        if (prefs.getCerebrasKey().isBlank()) {
-            return@withLock Result.failure(IllegalStateException("Set your Cerebras API key in Settings."))
+        if (!prefs.isLlmConfigured()) {
+            return@withLock Result.failure(IllegalStateException("Add an LLM API key in Settings."))
         }
         val dayKey = LocalDate.now().toString()
         runCatching { generateWeeklyGoals(dayKey) }.map { }

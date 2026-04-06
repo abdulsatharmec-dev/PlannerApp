@@ -11,13 +11,18 @@ class ChatRepository @Inject constructor(private val dao: ChatMessageDao) {
 
     fun observeMessages(): Flow<List<ChatMessageEntity>> = dao.observeMessages()
 
-    suspend fun appendMessage(content: String, isUser: Boolean) {
+    suspend fun appendMessage(
+        content: String,
+        isUser: Boolean,
+        totalTokens: Int? = null,
+    ) {
         dao.insert(
             ChatMessageEntity(
                 content = content,
                 isUser = isUser,
                 createdAtEpochMillis = System.currentTimeMillis(),
-            )
+                totalTokens = totalTokens.takeIf { !isUser },
+            ),
         )
     }
 
