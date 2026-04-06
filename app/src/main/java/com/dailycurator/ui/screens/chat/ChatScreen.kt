@@ -36,7 +36,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -44,7 +44,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -58,14 +57,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.dailycurator.data.local.ChatFontSizeCategory
+import com.dailycurator.ui.theme.backdropShowsThrough
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
+import com.mikepenz.markdown.m3.markdownTypography
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.flow.first
 
@@ -86,46 +91,33 @@ private data class ChatThemeColors(
     val sendFabContent: Color,
 )
 
+private fun chatColorsFromScheme(scheme: ColorScheme, transparentScreen: Boolean): ChatThemeColors {
+    val codeBg = lerp(scheme.surface, scheme.surfaceVariant, 0.55f)
+    val composerBar = scheme.surfaceContainerHigh
+    return ChatThemeColors(
+        screenBg = if (transparentScreen) Color.Transparent else scheme.background,
+        userBubble = scheme.primaryContainer,
+        userText = scheme.onPrimaryContainer,
+        assistantBubble = scheme.surface,
+        assistantText = scheme.onSurface,
+        metaText = scheme.onSurfaceVariant,
+        composerSurface = composerBar,
+        composerBorder = scheme.outline,
+        composerText = scheme.onSurface,
+        linkColor = scheme.primary,
+        codeBg = codeBg,
+        inlineCodeBg = lerp(codeBg, scheme.surfaceVariant, 0.35f),
+        sendFab = scheme.primary,
+        sendFabContent = scheme.onPrimary,
+    )
+}
+
 @Composable
 private fun rememberChatThemeColors(): ChatThemeColors {
-    val bgLum = MaterialTheme.colorScheme.background.luminance()
-    val dark = bgLum < 0.5f
-    return remember(dark) {
-        if (dark) {
-            ChatThemeColors(
-                screenBg = Color(0xFF0B141A),
-                userBubble = Color(0xFF005C4B),
-                userText = Color(0xFFE7FFEC),
-                assistantBubble = Color(0xFF1F2C34),
-                assistantText = Color(0xFFE9EDEF),
-                metaText = Color(0xFF8696A0),
-                composerSurface = Color(0xFF1F2C34),
-                composerBorder = Color(0xFF2A3942),
-                composerText = Color(0xFFE9EDEF),
-                linkColor = Color(0xFF53BDEB),
-                codeBg = Color(0xFF111B21),
-                inlineCodeBg = Color(0xFF2A3942),
-                sendFab = Color(0xFF00A884),
-                sendFabContent = Color.White,
-            )
-        } else {
-            ChatThemeColors(
-                screenBg = Color(0xFFECE5DD),
-                userBubble = Color(0xFFDCF8C6),
-                userText = Color(0xFF111B21),
-                assistantBubble = Color(0xFFFFFFFF),
-                assistantText = Color(0xFF111B21),
-                metaText = Color(0xFF667781),
-                composerSurface = Color(0xFFF0F2F5),
-                composerBorder = Color(0xFFD1D7DB),
-                composerText = Color(0xFF111B21),
-                linkColor = Color(0xFF027EB5),
-                codeBg = Color(0xFFE8EBEF),
-                inlineCodeBg = Color(0xFFE8EBEF),
-                sendFab = Color(0xFF25D366),
-                sendFabContent = Color.White,
-            )
-        }
+    val scheme = MaterialTheme.colorScheme
+    val transparentScreen = backdropShowsThrough()
+    return remember(scheme, transparentScreen) {
+        chatColorsFromScheme(scheme, transparentScreen)
     }
 }
 
@@ -140,8 +132,13 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     var showClearDialog by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val chatColors = rememberChatThemeColors()
-    val messageTextStyle = remember {
-        TextStyle(fontSize = 16.sp, lineHeight = 22.sp, letterSpacing = 0.01.sp)
+    val fontCategory by viewModel.chatFontSizeCategory.collectAsState()
+    val messageTextStyle = remember(fontCategory) {
+        TextStyle(
+            fontSize = fontCategory.messageSp.sp,
+            lineHeight = fontCategory.lineHeightSp.sp,
+            letterSpacing = 0.01.sp,
+        )
     }
 
     pendingMemoryProposal?.let { lines ->
@@ -180,7 +177,10 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                             )
                             Text(
                                 text = line,
-                                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, lineHeight = 22.sp),
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontSize = fontCategory.messageSp.sp,
+                                    lineHeight = fontCategory.lineHeightSp.sp,
+                                ),
                                 modifier = Modifier.weight(1f),
                             )
                         }
@@ -302,6 +302,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                         message = message,
                         colors = chatColors,
                         messageTextStyle = messageTextStyle,
+                        fontCategory = fontCategory,
                         maxBubbleWidth = maxWidth * 0.84f,
                     )
                 }
@@ -343,14 +344,17 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                         Text(
                             "Message",
                             color = chatColors.metaText,
-                            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp),
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontSize = fontCategory.composerSp.sp,
+                                lineHeight = (fontCategory.composerSp + 4f).sp,
+                            ),
                         )
                     },
                     shape = RoundedCornerShape(24.dp),
                     maxLines = 6,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        fontSize = 17.sp,
-                        lineHeight = 22.sp,
+                        fontSize = fontCategory.composerSp.sp,
+                        lineHeight = (fontCategory.composerSp + 6f).sp,
                         color = chatColors.composerText,
                     ),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -387,7 +391,11 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                         defaultElevation = if (isLoading) 0.dp else 3.dp,
                     ),
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", modifier = Modifier.size(22.dp))
+                    Icon(
+                        Icons.AutoMirrored.Filled.Send,
+                        contentDescription = "Send",
+                        modifier = Modifier.size(24.dp),
+                    )
                 }
             }
         }
@@ -409,6 +417,7 @@ private fun MessageBubble(
     message: ChatMessage,
     colors: ChatThemeColors,
     messageTextStyle: TextStyle,
+    fontCategory: ChatFontSizeCategory,
     maxBubbleWidth: Dp,
 ) {
     val alignment = if (message.isUser) Alignment.CenterEnd else Alignment.CenterStart
@@ -448,6 +457,7 @@ private fun MessageBubble(
                         markdown = message.content,
                         textColor = contentColor,
                         messageTextStyle = messageTextStyle,
+                        fontCategory = fontCategory,
                         colors = colors,
                     )
                 }
@@ -459,13 +469,13 @@ private fun MessageBubble(
             ) {
                 Text(
                     text = message.timestamp.format(DateTimeFormatter.ofPattern("HH:mm")),
-                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
+                    style = MaterialTheme.typography.labelMedium.copy(fontSize = fontCategory.timestampSp.sp),
                     color = colors.metaText,
                 )
                 if (!message.isUser && message.totalTokens != null) {
                     Text(
                         text = "· ${message.totalTokens} tok",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = fontCategory.tokenHintSp.sp),
                         color = colors.metaText.copy(alpha = 0.85f),
                     )
                 }
@@ -479,6 +489,7 @@ private fun AssistantMarkdownBody(
     markdown: String,
     textColor: Color,
     messageTextStyle: TextStyle,
+    fontCategory: ChatFontSizeCategory,
     colors: ChatThemeColors,
 ) {
     val mdColors = markdownColor(
@@ -489,11 +500,52 @@ private fun AssistantMarkdownBody(
         codeBackground = colors.codeBg,
         inlineCodeBackground = colors.inlineCodeBg,
     )
-    CompositionLocalProvider(LocalTextStyle provides messageTextStyle.copy(color = textColor)) {
-        Markdown(
-            content = markdown,
-            colors = mdColors,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-        )
-    }
+    val body = messageTextStyle.copy(color = textColor)
+    val m = fontCategory.messageSp
+    val l = fontCategory.lineHeightSp
+    val typography = markdownTypography(
+        h1 = body.copy(
+            fontSize = (m * 1.3f).sp,
+            lineHeight = (l * 1.2f).sp,
+            fontWeight = FontWeight.Bold,
+        ),
+        h2 = body.copy(
+            fontSize = (m * 1.2f).sp,
+            lineHeight = (l * 1.12f).sp,
+            fontWeight = FontWeight.Bold,
+        ),
+        h3 = body.copy(
+            fontSize = (m * 1.12f).sp,
+            lineHeight = l.sp,
+            fontWeight = FontWeight.SemiBold,
+        ),
+        h4 = body.copy(
+            fontSize = (m * 1.08f).sp,
+            lineHeight = l.sp,
+            fontWeight = FontWeight.SemiBold,
+        ),
+        h5 = body.copy(
+            fontSize = (m * 1.04f).sp,
+            lineHeight = l.sp,
+            fontWeight = FontWeight.Medium,
+        ),
+        h6 = body.copy(
+            fontSize = m.sp,
+            lineHeight = l.sp,
+            fontWeight = FontWeight.Medium,
+        ),
+        text = body,
+        code = body.copy(fontFamily = FontFamily.Monospace),
+        quote = body.copy(fontStyle = FontStyle.Italic),
+        paragraph = body,
+        ordered = body,
+        bullet = body,
+        list = body,
+    )
+    Markdown(
+        content = markdown,
+        colors = mdColors,
+        typography = typography,
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+    )
 }

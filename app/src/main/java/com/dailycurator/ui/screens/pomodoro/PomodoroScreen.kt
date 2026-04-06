@@ -57,6 +57,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.dailycurator.data.pomodoro.PomodoroLaunchRequest
+import com.dailycurator.ui.theme.appScreenBackground
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
@@ -128,7 +129,7 @@ fun PomodoroScreen(viewModel: PomodoroViewModel = hiltViewModel()) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .appScreenBackground(),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {

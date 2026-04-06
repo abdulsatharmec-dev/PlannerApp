@@ -9,6 +9,7 @@ import com.dailycurator.data.ai.JournalContextFormatter
 import com.dailycurator.data.chat.cerebrasChatToolDefinitions
 import com.dailycurator.data.chat.gmailAgentChatTools
 import com.dailycurator.data.local.AppPreferences
+import com.dailycurator.data.local.ChatFontSizeCategory
 import com.dailycurator.data.local.entity.ChatMessageEntity
 import com.dailycurator.data.remote.CerebrasApiException
 import com.dailycurator.data.remote.CerebrasChatMessage
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -62,6 +64,11 @@ class ChatViewModel @Inject constructor(
     val messages = chatRepository.observeMessages()
         .map { list -> list.map { it.toChatMessage() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val chatFontSizeCategory: StateFlow<ChatFontSizeCategory> =
+        prefs.chatFontSizeCategoryFlow
+            .map { ChatFontSizeCategory.fromStorageId(it) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChatFontSizeCategory.DEFAULT)
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()

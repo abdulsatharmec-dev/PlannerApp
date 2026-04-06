@@ -41,7 +41,7 @@ fun TodayScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .appScreenBackground(),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
         // ── Top App Bar

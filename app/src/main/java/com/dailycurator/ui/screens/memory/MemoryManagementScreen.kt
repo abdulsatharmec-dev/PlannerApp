@@ -38,6 +38,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.dailycurator.data.local.entity.AgentMemoryEntity
+import com.dailycurator.ui.theme.appScaffoldContainerColor
+import com.dailycurator.ui.theme.appScreenBackground
 
 @Composable
 fun MemoryManagementScreen(viewModel: MemoryManagementViewModel = hiltViewModel()) {
@@ -69,6 +71,7 @@ fun MemoryManagementScreen(viewModel: MemoryManagementViewModel = hiltViewModel(
     }
 
     Scaffold(
+        containerColor = appScaffoldContainerColor(),
         floatingActionButton = {
             FloatingActionButton(onClick = { showAdd = true }) {
                 Icon(Icons.Default.Add, contentDescription = "Add memory")
@@ -78,7 +81,7 @@ fun MemoryManagementScreen(viewModel: MemoryManagementViewModel = hiltViewModel(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                .appScreenBackground()
                 .padding(inner),
             contentPadding = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),

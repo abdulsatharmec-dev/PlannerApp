@@ -53,6 +53,7 @@ import com.dailycurator.ui.screens.pomodoro.PomodoroScreen
 import com.dailycurator.ui.screens.settings.SettingsScreen
 import com.dailycurator.ui.screens.tasks.TasksScreen
 import com.dailycurator.ui.screens.today.TodayScreen
+import com.dailycurator.ui.theme.appScaffoldContainerColor
 import kotlinx.coroutines.launch
 
 private fun subPageTitle(route: String?): String? = when (route) {
@@ -195,7 +196,7 @@ fun AppNavHost(
         },
     ) {
         Scaffold(
-            containerColor = MaterialTheme.colorScheme.background,
+            containerColor = appScaffoldContainerColor(),
             topBar = {
                 if (!isJournalEditor) {
                     when (val sub = subPageTitle(currentRoute)) {
@@ -224,7 +225,7 @@ fun AppNavHost(
                                     }
                                 },
                                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                                    containerColor = MaterialTheme.colorScheme.background,
+                                    containerColor = appScaffoldContainerColor(),
                                 ),
                             )
                         }
@@ -237,7 +238,7 @@ fun AppNavHost(
                                     }
                                 },
                                 colors = TopAppBarDefaults.topAppBarColors(
-                                    containerColor = MaterialTheme.colorScheme.background,
+                                    containerColor = appScaffoldContainerColor(),
                                 ),
                             )
                         }
@@ -255,7 +256,7 @@ fun AppNavHost(
                         Spacer(Modifier.height(0.dp))
                     } else {
                         NavigationBar(
-                            containerColor = MaterialTheme.colorScheme.background,
+                            containerColor = appScaffoldContainerColor(),
                             tonalElevation = 0.dp,
                         ) {
                             bottomNavItems.forEach { screen ->

@@ -52,6 +52,7 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import com.dailycurator.ui.components.WeeklyGoalsInsightCard
+import com.dailycurator.ui.theme.appScreenBackground
 
 @Composable
 fun PhoneUsageScreen(viewModel: PhoneUsageViewModel = hiltViewModel()) {
@@ -75,7 +76,7 @@ fun PhoneUsageScreen(viewModel: PhoneUsageViewModel = hiltViewModel()) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .appScreenBackground()
             .padding(horizontal = 20.dp),
         contentPadding = PaddingValues(bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp),

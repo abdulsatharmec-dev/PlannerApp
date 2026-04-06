@@ -1,16 +1,23 @@
 package com.dailycurator.ui.screens.settings
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dailycurator.data.gmail.GmailLinkedAccountPref
 import com.dailycurator.data.gmail.GmailTokenProvider
 import com.dailycurator.data.gmail.GmailTokenResult
 import com.dailycurator.data.local.AppPreferences
+import com.dailycurator.data.local.ChatFontSizeCategory
 import com.dailycurator.data.local.DayWindowMinutes
 import com.dailycurator.data.local.CEREBRAS_MODEL_OPTIONS
 import com.dailycurator.data.local.CerebrasModelOption
 import com.dailycurator.data.local.LlmApiKeyProfile
+import com.dailycurator.ui.theme.AppBackgroundOption
+import com.dailycurator.ui.theme.AppThemePalette
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -26,10 +33,23 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val prefs: AppPreferences,
     private val gmailTokenProvider: GmailTokenProvider,
+    @param:ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
     val isDarkTheme: StateFlow<Boolean> = prefs.darkThemeFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.isDarkTheme())
+
+    val themePaletteId: StateFlow<String> = prefs.themePaletteIdFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.getThemePaletteId())
+
+    val appBackgroundId: StateFlow<String> = prefs.appBackgroundIdFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.getAppBackgroundId())
+
+    val customWallpaperUri: StateFlow<String> = prefs.customWallpaperUriFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.getCustomWallpaperUri())
+
+    val chatFontSizeCategoryId: StateFlow<String> = prefs.chatFontSizeCategoryFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.getChatFontSizeCategoryId())
 
     val assistantInsightEnabled: StateFlow<Boolean> = prefs.assistantInsightEnabledFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.isAssistantInsightEnabled())
@@ -106,6 +126,36 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.getLlmProfiles())
 
     fun toggleDarkTheme() = prefs.setDarkTheme(!isDarkTheme.value)
+
+    fun setThemePalette(palette: AppThemePalette) {
+        prefs.setThemePaletteId(palette.storageId)
+    }
+
+    fun setAppBackground(option: AppBackgroundOption) {
+        prefs.setAppBackgroundId(option.storageId)
+    }
+
+    fun setCustomWallpaperUri(uri: String) {
+        prefs.setCustomWallpaperUri(uri)
+    }
+
+    fun setChatFontSizeCategory(category: ChatFontSizeCategory) {
+        prefs.setChatFontSizeCategoryId(category.storageId)
+    }
+
+    fun clearCustomWallpaper() {
+        val cur = prefs.getCustomWallpaperUri()
+        if (cur.isNotBlank()) {
+            runCatching {
+                val u = Uri.parse(cur)
+                appContext.contentResolver.releasePersistableUriPermission(
+                    u,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
+        }
+        prefs.clearCustomWallpaperUri()
+    }
 
     fun setDayWindowStart(time: LocalTime) {
         prefs.setDayWindowStartMinutes(time.hour * 60 + time.minute)

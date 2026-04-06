@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.dailycurator.data.ai.AiPromptDefaults
 import com.dailycurator.data.gmail.GmailLinkedAccountPref
+import com.dailycurator.ui.theme.AppBackgroundOption
+import com.dailycurator.ui.theme.AppThemePalette
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -16,6 +18,10 @@ import javax.inject.Singleton
 
 private const val PREFS_NAME = "curator_prefs"
 private const val KEY_DARK = "dark_theme"
+private const val KEY_THEME_PALETTE = "theme_palette_id"
+private const val KEY_APP_BACKGROUND = "app_background_id"
+private const val KEY_CUSTOM_WALLPAPER_URI = "custom_wallpaper_uri"
+private const val KEY_CHAT_FONT_SIZE_CATEGORY = "chat_font_size_category"
 private const val KEY_CEREBRAS = "cerebras_key"
 private const val KEY_CEREBRAS_MODEL = "cerebras_model_id"
 private const val KEY_ASSISTANT_INSIGHT_ENABLED = "assistant_insight_enabled"
@@ -69,6 +75,44 @@ class AppPreferences @Inject constructor(
         }
         prefs.registerOnSharedPreferenceChangeListener(listener)
         trySend(prefs.getBoolean(KEY_DARK, false))
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    /** Selected accent palette id ([AppThemePalette.storageId]). */
+    val themePaletteIdFlow: Flow<String> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_THEME_PALETTE) trySend(getThemePaletteId())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getThemePaletteId())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    /** Decorative background id ([AppBackgroundOption.storageId]). */
+    val appBackgroundIdFlow: Flow<String> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_APP_BACKGROUND) trySend(getAppBackgroundId())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getAppBackgroundId())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val customWallpaperUriFlow: Flow<String> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_CUSTOM_WALLPAPER_URI) trySend(getCustomWallpaperUri())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getCustomWallpaperUri())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val chatFontSizeCategoryFlow: Flow<String> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_CHAT_FONT_SIZE_CATEGORY) trySend(getChatFontSizeCategoryId())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getChatFontSizeCategoryId())
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }.distinctUntilChanged()
 
@@ -225,6 +269,43 @@ class AppPreferences @Inject constructor(
 
     fun setDarkTheme(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_DARK, enabled).apply()
+    }
+
+    fun getThemePaletteId(): String =
+        prefs.getString(KEY_THEME_PALETTE, AppThemePalette.VIOLET.storageId)
+            ?: AppThemePalette.VIOLET.storageId
+
+    fun setThemePaletteId(id: String) {
+        val v = AppThemePalette.fromStorageId(id).storageId
+        prefs.edit().putString(KEY_THEME_PALETTE, v).apply()
+    }
+
+    fun getAppBackgroundId(): String =
+        prefs.getString(KEY_APP_BACKGROUND, AppBackgroundOption.NONE.storageId)
+            ?: AppBackgroundOption.NONE.storageId
+
+    fun setAppBackgroundId(id: String) {
+        val v = AppBackgroundOption.fromStorageId(id).storageId
+        prefs.edit().putString(KEY_APP_BACKGROUND, v).apply()
+    }
+
+    fun getCustomWallpaperUri(): String = prefs.getString(KEY_CUSTOM_WALLPAPER_URI, "") ?: ""
+
+    fun setCustomWallpaperUri(uri: String) {
+        prefs.edit().putString(KEY_CUSTOM_WALLPAPER_URI, uri).apply()
+    }
+
+    fun clearCustomWallpaperUri() {
+        prefs.edit().remove(KEY_CUSTOM_WALLPAPER_URI).apply()
+    }
+
+    fun getChatFontSizeCategoryId(): String =
+        prefs.getString(KEY_CHAT_FONT_SIZE_CATEGORY, ChatFontSizeCategory.DEFAULT.storageId)
+            ?: ChatFontSizeCategory.DEFAULT.storageId
+
+    fun setChatFontSizeCategoryId(id: String) {
+        val v = ChatFontSizeCategory.fromStorageId(id).storageId
+        prefs.edit().putString(KEY_CHAT_FONT_SIZE_CATEGORY, v).apply()
     }
 
     fun setCerebrasKey(key: String) {

@@ -48,7 +48,7 @@ fun GoalsScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .appScreenBackground(),
         contentPadding = PaddingValues(bottom = 32.dp)
     ) {
         item {

@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.dailycurator.ui.components.MarkdownSummaryBody
+import com.dailycurator.ui.theme.appScreenBackground
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -45,7 +46,7 @@ fun GmailMailboxSummaryScreen(viewModel: GmailMailboxSummaryViewModel = hiltView
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .appScreenBackground()
             .padding(horizontal = 20.dp)
             .verticalScroll(rememberScrollState()),
     ) {

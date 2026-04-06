@@ -1,8 +1,13 @@
 package com.dailycurator.ui.screens.settings
 
+import android.content.Intent
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,6 +20,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -38,6 +45,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -55,6 +63,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -62,18 +71,26 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.dailycurator.data.ai.AiPromptDefaults
+import com.dailycurator.data.local.ChatFontSizeCategory
 import com.dailycurator.data.gmail.GmailTokenResult
 import com.dailycurator.ui.LocalGmailLinkActions
+import com.dailycurator.ui.theme.AppBackgroundOption
+import com.dailycurator.ui.theme.AppThemePalette
+import com.dailycurator.ui.theme.appScreenBackground
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
 private val sectionGap = 12.dp
 private val horizontalPad = 20.dp
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val isDark by viewModel.isDarkTheme.collectAsState()
+    val themePaletteId by viewModel.themePaletteId.collectAsState()
+    val appBackgroundId by viewModel.appBackgroundId.collectAsState()
+    val customWallpaperUri by viewModel.customWallpaperUri.collectAsState()
+    val chatFontSizeCategoryId by viewModel.chatFontSizeCategoryId.collectAsState()
     val assistantInsightEnabled by viewModel.assistantInsightEnabled.collectAsState()
     val weeklyGoalsInsightEnabled by viewModel.weeklyGoalsInsightEnabled.collectAsState()
     val journalShareWithChat by viewModel.journalShareWithChat.collectAsState()
@@ -108,6 +125,22 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 
     val context = LocalContext.current
     val gmailLinkActions = LocalGmailLinkActions.current
+
+    val pickWallpaperLauncher = rememberLauncherForActivityResult(
+        contract = PickVisualMedia(),
+    ) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            } catch (_: SecurityException) {
+                // Some providers still allow read without persistable permission.
+            }
+            viewModel.setCustomWallpaperUri(uri.toString())
+        }
+    }
 
     if (showLlmKeysDialog) {
         LlmApiKeysManageDialog(
@@ -188,7 +221,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .appScreenBackground(),
         contentPadding = PaddingValues(bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(sectionGap),
     ) {
@@ -211,6 +244,124 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                     checked = isDark,
                     onCheckedChange = { viewModel.toggleDarkTheme() },
                 )
+                Column(
+                    Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        "Theme color",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "Applies to light and dark mode. Violet matches the original look.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        AppThemePalette.entries.forEach { p ->
+                            val selected = p.storageId == themePaletteId
+                            FilterChip(
+                                selected = selected,
+                                onClick = { viewModel.setThemePalette(p) },
+                                label = { Text(p.displayLabel) },
+                                leadingIcon = {
+                                    ThemePaletteSwatch(
+                                        p.previewPrimary(isDark),
+                                        Modifier.size(18.dp),
+                                    )
+                                },
+                            )
+                        }
+                    }
+                    Text(
+                        "Background",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "Gradients and patterns sit behind your screens. Your own photo can be dark or colorful — a soft veil keeps lists readable.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        AppBackgroundOption.entries.forEach { opt ->
+                            FilterChip(
+                                selected = opt.storageId == appBackgroundId,
+                                onClick = { viewModel.setAppBackground(opt) },
+                                label = { Text(opt.displayLabel) },
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Your photo",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "Optional full-screen image from your gallery (combined with the style you picked above).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        TextButton(
+                            onClick = {
+                                pickWallpaperLauncher.launch(
+                                    PickVisualMediaRequest(PickVisualMedia.ImageOnly),
+                                )
+                            },
+                        ) {
+                            Text("Choose from gallery")
+                        }
+                        if (customWallpaperUri.isNotBlank()) {
+                            TextButton(onClick = { viewModel.clearCustomWallpaper() }) {
+                                Text("Remove photo")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            SettingsSection(title = "Chat appearance") {
+                Column(
+                    Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        "Text size",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "Bubbles and composer use your theme colors. Size applies to messages, markdown, and the input field.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        ChatFontSizeCategory.entries.forEach { cat ->
+                            FilterChip(
+                                selected = cat.storageId == chatFontSizeCategoryId,
+                                onClick = { viewModel.setChatFontSizeCategory(cat) },
+                                label = { Text(cat.displayLabel) },
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -779,6 +930,14 @@ private fun SettingsNavRow(
             )
         }
     }
+}
+
+@Composable
+private fun ThemePaletteSwatch(color: Color, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .background(color, RoundedCornerShape(4.dp)),
+    )
 }
 
 private fun minuteOfDayToLocalTime(minuteOfDay: Int): LocalTime {

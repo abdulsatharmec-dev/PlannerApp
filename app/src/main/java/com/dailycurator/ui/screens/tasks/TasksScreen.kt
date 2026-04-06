@@ -66,6 +66,7 @@ import com.dailycurator.ui.components.PriorityItem
 import com.dailycurator.ui.components.formatDurationMinutes
 import com.dailycurator.ui.theme.AccentGreen
 import com.dailycurator.ui.theme.AccentRed
+import com.dailycurator.ui.theme.appScaffoldContainerColor
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -146,7 +147,7 @@ fun TasksScreen(
                 Icon(Icons.Default.Add, contentDescription = "Add Task")
             }
         },
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = appScaffoldContainerColor(),
     ) { padding ->
         LazyColumn(
             modifier = Modifier

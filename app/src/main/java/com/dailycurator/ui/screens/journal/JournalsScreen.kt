@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.dailycurator.data.model.JournalEntry
+import com.dailycurator.ui.theme.backdropShowsThrough
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -89,15 +90,19 @@ fun JournalsScreen(
         )
     }
 
+    val decorOn = backdropShowsThrough()
+    val mid = if (!decorOn) MaterialTheme.colorScheme.background else Color.Transparent
+    val topA = if (!decorOn) 0.35f else 0.22f
+    val botA = if (!decorOn) 0.2f else 0.12f
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
                     listOf(
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-                        MaterialTheme.colorScheme.background,
-                        MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.2f),
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = topA),
+                        mid,
+                        MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = botA),
                     ),
                 ),
             )

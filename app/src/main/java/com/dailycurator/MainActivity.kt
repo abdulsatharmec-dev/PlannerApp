@@ -9,12 +9,15 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import com.dailycurator.data.gmail.buildGoogleSignInClient
@@ -28,7 +31,13 @@ import com.dailycurator.ui.GmailLinkActions
 import com.dailycurator.ui.LocalGmailLinkActions
 import com.dailycurator.ui.navigation.AppNavHost
 import com.dailycurator.ui.reminders.TaskReminderBottomSheet
+import com.dailycurator.ui.theme.AppBackgroundOption
+import com.dailycurator.ui.theme.AppDecorBackdrop
+import com.dailycurator.ui.theme.AppThemePalette
 import com.dailycurator.ui.theme.DailyCuratorTheme
+import com.dailycurator.ui.theme.LocalAppBackgroundOption
+import com.dailycurator.ui.theme.LocalCustomWallpaperUri
+import com.dailycurator.ui.theme.WallpaperReadableScrim
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -78,45 +87,71 @@ class MainActivity : ComponentActivity() {
         setContent {
             val incoming by incomingState
             val isDark by prefs.darkThemeFlow.collectAsState(initial = prefs.isDarkTheme())
-            DailyCuratorTheme(darkTheme = isDark) {
-                CompositionLocalProvider(
-                    LocalGmailLinkActions provides GmailLinkActions(
-                        linkGmail = {
-                            gmailSignInLauncher.launch(googleSignInClient.signInIntent)
-                        },
-                        linkDifferentGoogleAccount = {
-                            googleSignInClient.signOut().addOnCompleteListener {
-                                gmailSignInLauncher.launch(googleSignInClient.signInIntent)
-                            }
-                        },
-                    ),
-                ) {
+            val paletteId by prefs.themePaletteIdFlow.collectAsState(initial = prefs.getThemePaletteId())
+            val bgId by prefs.appBackgroundIdFlow.collectAsState(initial = prefs.getAppBackgroundId())
+            val palette = remember(paletteId) { AppThemePalette.fromStorageId(paletteId) }
+            val backgroundOption = remember(bgId) { AppBackgroundOption.fromStorageId(bgId) }
+            val customWallpaperUri by prefs.customWallpaperUriFlow.collectAsState(
+                initial = prefs.getCustomWallpaperUri(),
+            )
+            val wallpaperActive =
+                backgroundOption != AppBackgroundOption.NONE || customWallpaperUri.isNotBlank()
+            DailyCuratorTheme(darkTheme = isDark, palette = palette) {
                 Box(Modifier.fillMaxSize()) {
-                    AppNavHost(
-                        openPomodoroRequest = incoming.openPomodoro,
-                        openHabitsRequest = incoming.openHabits,
-                        onConsumedOpenPomodoro = {
-                            incomingState.value = incomingState.value.copy(openPomodoro = false)
-                        },
-                        onConsumedOpenHabits = {
-                            incomingState.value = incomingState.value.copy(openHabits = false)
-                        },
-                    )
-                    incoming.taskReminderSheetId?.let { tid ->
-                        TaskReminderBottomSheet(
-                            taskId = tid,
-                            onDismiss = {
-                                incomingState.value = incomingState.value.copy(taskReminderSheetId = null)
-                            },
-                            onNavigateToPomodoro = {
-                                incomingState.value = incomingState.value.copy(
-                                    taskReminderSheetId = null,
-                                    openPomodoro = true,
+                    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
+                    AppDecorBackdrop(backgroundOption, customWallpaperUri)
+                    CompositionLocalProvider(
+                        LocalAppBackgroundOption provides backgroundOption,
+                    ) {
+                        CompositionLocalProvider(
+                            LocalCustomWallpaperUri provides customWallpaperUri,
+                        ) {
+                        CompositionLocalProvider(
+                            LocalGmailLinkActions provides GmailLinkActions(
+                                linkGmail = {
+                                    gmailSignInLauncher.launch(googleSignInClient.signInIntent)
+                                },
+                                linkDifferentGoogleAccount = {
+                                    googleSignInClient.signOut().addOnCompleteListener {
+                                        gmailSignInLauncher.launch(googleSignInClient.signInIntent)
+                                    }
+                                },
+                            ),
+                        ) {
+                            Box(Modifier.fillMaxSize()) {
+                                WallpaperReadableScrim(
+                                    wallpaperActive = wallpaperActive,
+                                    hasCustomPhoto = customWallpaperUri.isNotBlank(),
                                 )
-                            },
-                        )
+                                AppNavHost(
+                                    openPomodoroRequest = incoming.openPomodoro,
+                                    openHabitsRequest = incoming.openHabits,
+                                    onConsumedOpenPomodoro = {
+                                        incomingState.value = incomingState.value.copy(openPomodoro = false)
+                                    },
+                                    onConsumedOpenHabits = {
+                                        incomingState.value = incomingState.value.copy(openHabits = false)
+                                    },
+                                )
+                                incoming.taskReminderSheetId?.let { tid ->
+                                    TaskReminderBottomSheet(
+                                        taskId = tid,
+                                        onDismiss = {
+                                            incomingState.value =
+                                                incomingState.value.copy(taskReminderSheetId = null)
+                                        },
+                                        onNavigateToPomodoro = {
+                                            incomingState.value = incomingState.value.copy(
+                                                taskReminderSheetId = null,
+                                                openPomodoro = true,
+                                            )
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                        }
                     }
-                }
                 }
             }
         }
