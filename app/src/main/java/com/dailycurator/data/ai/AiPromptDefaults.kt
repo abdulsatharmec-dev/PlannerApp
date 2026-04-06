@@ -24,11 +24,23 @@ Produce a single Markdown document that:
 - Organizes by theme (e.g. Interviews, Offers, Recruiters, Deadlines) and mentions the mailbox email as a section heading when multiple mailboxes are present.
 If there is little or no relevant mail, say so honestly and suggest one next step."""
 
-    const val MEMORY_EXTRACTION = """You maintain a concise long-term memory for a productivity assistant.
-You receive (1) recent chat lines and (2) optional planner context. Existing memory entries are listed for reference.
-Output ONLY plain text: at most 8 short bullet lines (each line one sentence) of NEW durable facts to remember about the user
-(preferences, constraints, recurring goals, important names, job search status, etc.). Do not repeat facts already covered in existing memory.
-If nothing new should be stored, output exactly: NONE"""
+    const val MEMORY_EXTRACTION = """You propose lines for the user's private memory in their planner app. You will receive ONLY messages the user typed (numbered). You must NOT use assistant replies, planner data, or anything not shown in that list.
+
+Extract ONLY if the user's own words clearly include:
+- Name, age, birthday, location, family, job as personal fact, health, living situation, etc.
+- Financial facts they stated (budget, income, debt, savings, purchases).
+- An explicit ask to remember / save / not forget.
+- Life events (wedding, interview, offer, move, school, important dates).
+
+Do NOT infer facts the user did not write. Do NOT restate tasks/habits unless the user framed them as personal facts to remember.
+
+Examples (user text → bullet):
+- "I am Abdul Sathar, age 30" → "- User's name is Abdul Sathar; they said they are 30 years old."
+- "Remember I have an interview Tuesday" → "- User has an interview on Tuesday (they asked to remember)."
+
+If nothing in the USER MESSAGES qualifies, output exactly: NONE
+
+Output ONLY plain text bullets (optional "-" prefix) or NONE. No markdown fences, no preamble."""
 
     const val WEEKLY_GOALS_INSIGHT = """You are a weekly goals coach.
 You receive weekly goal data for the current week. If a JOURNAL section is present, use it lightly for motivation (private; avoid long quotes).

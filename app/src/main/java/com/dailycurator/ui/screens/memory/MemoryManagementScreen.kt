@@ -17,7 +17,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FloatingActionButton
@@ -90,14 +89,10 @@ fun MemoryManagementScreen(viewModel: MemoryManagementViewModel = hiltViewModel(
                     style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
                 )
                 Text(
-                    "The AI reads these lines in chat when memory is enabled in Settings. Auto entries are created from chats and from planner snapshots you trigger below.",
+                    "The AI reads these lines in chat when memory is enabled in Settings. New lines are added only when you confirm suggestions in chat (from your own messages) or when you add or edit entries here.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.height(8.dp))
-                Button(onClick = { viewModel.ingestFromPlanner() }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Update memory from planner (tasks / habits / goals)")
-                }
                 Spacer(Modifier.height(8.dp))
             }
             items(entries, key = { it.id }) { row ->

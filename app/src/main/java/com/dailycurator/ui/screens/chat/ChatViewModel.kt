@@ -66,6 +66,10 @@ class ChatViewModel @Inject constructor(
     private val _pendingDeletion = MutableStateFlow<PendingChatDeletion?>(null)
     val pendingDeletion = _pendingDeletion.asStateFlow()
 
+    /** Suggested memory lines from the user's messages; shown in chat for confirm/skip. */
+    private val _pendingMemoryProposal = MutableStateFlow<List<String>?>(null)
+    val pendingMemoryProposal = _pendingMemoryProposal.asStateFlow()
+
     /** Bumped on [clearChat] so in-flight replies are not written after history is cleared. */
     private var chatSession: Int = 0
 
@@ -73,9 +77,25 @@ class ChatViewModel @Inject constructor(
         chatSession++
         _isLoading.value = false
         _pendingDeletion.value = null
+        _pendingMemoryProposal.value = null
         viewModelScope.launch {
             chatRepository.clearAll()
         }
+    }
+
+    fun dismissMemoryProposal() {
+        _pendingMemoryProposal.value = null
+    }
+
+    fun confirmMemoryProposal(lines: List<String>) = viewModelScope.launch {
+        if (lines.isEmpty()) {
+            _pendingMemoryProposal.value = null
+            return@launch
+        }
+        withContext(Dispatchers.IO) {
+            agentMemoryRepository.insertUserConfirmedMemoryLines(lines)
+        }
+        _pendingMemoryProposal.value = null
     }
 
     fun dismissPendingDeletion() {
@@ -134,10 +154,13 @@ class ChatViewModel @Inject constructor(
             _isLoading.value = true
             try {
                 runChatTurn(sessionAtSend)
-                if (sessionAtSend == chatSession && prefs.isAgentMemoryEnabled() && prefs.getCerebrasKey().isNotBlank()) {
+                if (sessionAtSend == chatSession && prefs.isAgentMemoryEnabled()) {
                     val recent = chatRepository.getRecentAscending(16)
-                    withContext(Dispatchers.IO) {
-                        agentMemoryRepository.extractFromRecentChat(recent)
+                    val proposed = withContext(Dispatchers.IO) {
+                        agentMemoryRepository.proposeMemoryFromUserChatOnly(recent)
+                    }
+                    if (sessionAtSend == chatSession && proposed.isNotEmpty()) {
+                        _pendingMemoryProposal.value = proposed
                     }
                 }
             } catch (e: Exception) {
