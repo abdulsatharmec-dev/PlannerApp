@@ -18,6 +18,14 @@ data class PriorityTask(
     val statusNote: String? = null,
     val urgency: Urgency = Urgency.GREEN,
     val isDone: Boolean = false,
+    /** Shown under Top 5 on Home (independent of list sort rank). */
+    val isTopFive: Boolean = false,
+    /** Daily essentials (meals, sleep, etc.) excluded from productive time estimates. */
+    val isMustDo: Boolean = false,
+    /**
+     * Optional label index shown on the left of the task card. **0** = auto (1, 2, 3… by day order: rank, then start time, then id).
+     */
+    val displayNumber: Int = 0,
     val date: LocalDate = LocalDate.now()
 )
 

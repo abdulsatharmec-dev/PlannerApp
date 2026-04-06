@@ -25,7 +25,7 @@ private fun TaskEntity.toPriorityTask() = PriorityTask(
     endTime = endTime.toLocalTime(),
     dueInfo = dueInfo, statusNote = statusNote,
     urgency = Urgency.valueOf(urgency),
-    isDone = isDone, date = date.toLocalDate(),
+    isDone = isDone, isTopFive = isTopFive, isMustDo = isMustDo, displayNumber = displayNumber, date = date.toLocalDate(),
 )
 
 @Singleton
@@ -54,7 +54,8 @@ class TaskRepository @Inject constructor(private val dao: TaskDao) {
             startTime = task.startTime.format(TIME_FMT),
             endTime = task.endTime.format(TIME_FMT),
             dueInfo = task.dueInfo, statusNote = task.statusNote,
-            urgency = task.urgency.name, isDone = task.isDone,
+            urgency = task.urgency.name, isDone = task.isDone, isTopFive = task.isTopFive, isMustDo = task.isMustDo,
+            displayNumber = task.displayNumber,
             date = task.date.format(DATE_FMT))
     )
 
@@ -63,7 +64,8 @@ class TaskRepository @Inject constructor(private val dao: TaskDao) {
             startTime = task.startTime.format(TIME_FMT),
             endTime = task.endTime.format(TIME_FMT),
             dueInfo = task.dueInfo, statusNote = task.statusNote,
-            urgency = task.urgency.name, isDone = task.isDone,
+            urgency = task.urgency.name, isDone = task.isDone, isTopFive = task.isTopFive, isMustDo = task.isMustDo,
+            displayNumber = task.displayNumber,
             date = task.date.format(DATE_FMT))
     )
 
@@ -72,7 +74,8 @@ class TaskRepository @Inject constructor(private val dao: TaskDao) {
             startTime = task.startTime.format(TIME_FMT),
             endTime = task.endTime.format(TIME_FMT),
             dueInfo = task.dueInfo, statusNote = task.statusNote,
-            urgency = task.urgency.name, isDone = task.isDone,
+            urgency = task.urgency.name, isDone = task.isDone, isTopFive = task.isTopFive, isMustDo = task.isMustDo,
+            displayNumber = task.displayNumber,
             date = task.date.format(DATE_FMT))
     )
 

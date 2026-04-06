@@ -9,15 +9,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Keyboard
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DisplayMode
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -76,7 +73,8 @@ fun PickDateDialog(
 ) {
     if (!visible) return
     val state = rememberDatePickerState(
-        initialSelectedDateMillis = localDateToMillis(initialDate)
+        initialSelectedDateMillis = localDateToMillis(initialDate),
+        initialDisplayMode = DisplayMode.Input,
     )
     DatePickerDialog(
         onDismissRequest = onDismiss,
@@ -110,38 +108,15 @@ fun PickTimeDialog(
         initialMinute = initialTime.minute,
         is24Hour = true
     )
-    var layoutType by remember { mutableStateOf(TimePickerLayoutType.Vertical) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        title = { Text(title, style = MaterialTheme.typography.titleMedium) },
         text = {
-            Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    FilterChip(
-                        selected = layoutType == TimePickerLayoutType.Vertical,
-                        onClick = { layoutType = TimePickerLayoutType.Vertical },
-                        label = { Text("Clock") },
-                        leadingIcon = {
-                            Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.padding(end = 4.dp))
-                        }
-                    )
-                    Spacer(Modifier.padding(horizontal = 4.dp))
-                    FilterChip(
-                        selected = layoutType == TimePickerLayoutType.Horizontal,
-                        onClick = { layoutType = TimePickerLayoutType.Horizontal },
-                        label = { Text("Type") },
-                        leadingIcon = {
-                            Icon(Icons.Default.Keyboard, contentDescription = null, modifier = Modifier.padding(end = 4.dp))
-                        }
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                TimePicker(state = timeState, layoutType = layoutType)
-            }
+            TimePicker(
+                state = timeState,
+                layoutType = TimePickerLayoutType.Horizontal,
+                modifier = Modifier.padding(vertical = 4.dp),
+            )
         },
         confirmButton = {
             TextButton(onClick = {
@@ -155,34 +130,56 @@ fun PickTimeDialog(
     )
 }
 
+private val CUSTOM_DURATION_SUGGESTION_MINUTES = listOf(15, 25, 30, 40, 45, 60, 75, 90, 120, 180, 240)
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PickCustomDurationDialog(
     visible: Boolean,
     initialMinutes: Int,
     onDismiss: () -> Unit,
-    onConfirm: (Int) -> Unit
+    onConfirm: (Int) -> Unit,
 ) {
     if (!visible) return
     var value by remember(initialMinutes) { mutableFloatStateOf(initialMinutes.coerceIn(15, 480).toFloat()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Custom duration") },
+        title = { Text("Custom duration", style = MaterialTheme.typography.titleMedium) },
         text = {
             Column {
                 Text(
                     formatDurationMinutes(value.roundToInt()),
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.titleMedium,
                 )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Suggestions",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(6.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    CUSTOM_DURATION_SUGGESTION_MINUTES.forEach { m ->
+                        FilterChip(
+                            selected = value.roundToInt() == m,
+                            onClick = { value = m.toFloat().coerceIn(15f, 480f) },
+                            label = { Text(formatDurationMinutes(m)) },
+                        )
+                    }
+                }
                 Spacer(Modifier.height(12.dp))
                 Slider(
                     value = value,
                     onValueChange = { value = it },
-                    valueRange = 15f..480f
+                    valueRange = 15f..480f,
                 )
                 Text(
                     "15 min — 8 h (snap to 5 min on save)",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         },
@@ -217,28 +214,58 @@ fun DurationPresetSelector(
     selectedMinutes: Int,
     onMinutesSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    presets: List<DurationPreset> = DEFAULT_DURATION_PRESETS
+    presets: List<DurationPreset> = DEFAULT_DURATION_PRESETS,
+    /** Single row 10m / 20m / Custom for task editor; habits/goals use full [presets]. */
+    useCompactTaskRow: Boolean = false,
 ) {
     var showCustom by remember { mutableStateOf(false) }
+    val compactPresets = remember {
+        listOf(DurationPreset("10m", 10), DurationPreset("20m", 20))
+    }
     Column(modifier) {
         Text("Duration", style = MaterialTheme.typography.labelMedium)
         Spacer(Modifier.height(6.dp))
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            presets.forEach { p ->
+        if (useCompactTaskRow) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                compactPresets.forEach { p ->
+                    FilterChip(
+                        selected = selectedMinutes == p.minutes && !showCustom,
+                        onClick = {
+                            showCustom = false
+                            onMinutesSelected(p.minutes)
+                        },
+                        label = { Text(p.label) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 FilterChip(
-                    selected = selectedMinutes == p.minutes,
-                    onClick = { onMinutesSelected(p.minutes) },
-                    label = { Text(p.label) }
+                    selected = showCustom || compactPresets.none { it.minutes == selectedMinutes },
+                    onClick = { showCustom = true },
+                    label = { Text("Custom") },
+                    modifier = Modifier.weight(1f),
                 )
             }
-            FilterChip(
-                selected = showCustom || presets.none { it.minutes == selectedMinutes },
-                onClick = { showCustom = true },
-                label = { Text("Custom") }
-            )
+        } else {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                presets.forEach { p ->
+                    FilterChip(
+                        selected = selectedMinutes == p.minutes,
+                        onClick = { onMinutesSelected(p.minutes) },
+                        label = { Text(p.label) },
+                    )
+                }
+                FilterChip(
+                    selected = showCustom || presets.none { it.minutes == selectedMinutes },
+                    onClick = { showCustom = true },
+                    label = { Text("Custom") },
+                )
+            }
         }
         PickCustomDurationDialog(
             visible = showCustom,
@@ -247,7 +274,7 @@ fun DurationPresetSelector(
             onConfirm = {
                 onMinutesSelected(it)
                 showCustom = false
-            }
+            },
         )
     }
 }

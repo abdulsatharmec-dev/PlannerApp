@@ -36,7 +36,7 @@ import java.time.format.DateTimeFormatter
         CachedInsightEntity::class, JournalEntryEntity::class, HabitLogEntity::class,
         PomodoroSessionEntity::class, AgentMemoryEntity::class,
     ],
-    version = 9,
+    version = 12,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -123,6 +123,25 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tasks ADD COLUMN isMustDo INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tasks ADD COLUMN displayNumber INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tasks ADD COLUMN isTopFive INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("UPDATE tasks SET isTopFive = 1 WHERE rank >= 1 AND rank <= 5")
+            }
+        }
+
         private val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE habits ADD COLUMN seriesId TEXT NOT NULL DEFAULT ''")
@@ -187,6 +206,9 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_6_7,
                         MIGRATION_7_8,
                         MIGRATION_8_9,
+                        MIGRATION_9_10,
+                        MIGRATION_10_11,
+                        MIGRATION_11_12,
                     )
                     .fallbackToDestructiveMigration()
                     .addCallback(object : Callback() {
@@ -210,19 +232,19 @@ abstract class AppDatabase : RoomDatabase() {
             db.taskDao().apply {
                 insert(TaskEntity(rank = 1, title = "Finalize Q4 Budget Sheets",
                     startTime = "09:00", endTime = "10:30", dueInfo = "Due by 4:00 PM",
-                    urgency = "GREEN", date = today, isProtected = false))
+                    urgency = "GREEN", date = today, isProtected = false, isTopFive = true))
                 insert(TaskEntity(rank = 2, title = "Contract Review: Acme Corp",
                     startTime = "11:00", endTime = "12:00", statusNote = "Legal approval pending",
-                    urgency = "GREEN", date = today))
+                    urgency = "GREEN", date = today, isTopFive = true))
                 insert(TaskEntity(rank = 3, title = "Hiring: Senior UI Designer",
                     startTime = "13:30", endTime = "14:30", statusNote = "Review 5 portfolios",
-                    urgency = "GREEN", date = today))
+                    urgency = "GREEN", date = today, isTopFive = true))
                 insert(TaskEntity(rank = 4, title = "Presentation Prep: Board Meeting",
                     startTime = "15:00", endTime = "16:30", statusNote = "Slide 12-24 remaining",
-                    urgency = "RED", date = today))
+                    urgency = "RED", date = today, isTopFive = true))
                 insert(TaskEntity(rank = 5, title = "Bi-Weekly Sync: Marketing",
                     startTime = "16:30", endTime = "17:00", statusNote = "External Agency included",
-                    urgency = "NEUTRAL", date = today))
+                    urgency = "NEUTRAL", date = today, isTopFive = true))
             }
 
             // Seed habits

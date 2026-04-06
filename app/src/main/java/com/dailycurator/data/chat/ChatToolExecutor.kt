@@ -198,8 +198,10 @@ class ChatToolExecutor @Inject constructor(
         val duration = args.optInt("duration_minutes") ?: 60
         val urgency = parseUrgency(args.optString("urgency"))
         val top = args.optBoolean("top_priority") == true
+        val mustDo = args.optBoolean("must_do") == true
+        val displayNumber = args.optInt("display_number")?.coerceIn(0, 999) ?: 0
         val note = args.optString("note")
-        val rank = if (top) 1 else taskRepository.nextRankForDate(date)
+        val rank = taskRepository.nextRankForDate(date)
         val end = start.plusMinutes(duration.toLong())
         val task = PriorityTask(
             rank = rank,
@@ -208,6 +210,9 @@ class ChatToolExecutor @Inject constructor(
             endTime = end,
             statusNote = note,
             urgency = urgency,
+            isTopFive = top,
+            isMustDo = mustDo,
+            displayNumber = displayNumber,
             date = date,
         )
         val id = taskRepository.insert(task)
@@ -226,9 +231,11 @@ class ChatToolExecutor @Inject constructor(
             t = t.copy(endTime = t.startTime.plusMinutes(dm.toLong()))
         }
         args.optString("urgency")?.let { t = t.copy(urgency = parseUrgency(it)) }
-        if (args.optBoolean("top_priority") == true) t = t.copy(rank = 1)
+        args.optBoolean("top_priority")?.let { top -> t = t.copy(isTopFive = top) }
         args.optString("note")?.let { t = t.copy(statusNote = it) }
         args.optBoolean("done")?.let { t = t.copy(isDone = it) }
+        args.optBoolean("must_do")?.let { t = t.copy(isMustDo = it) }
+        args.optInt("display_number")?.let { t = t.copy(displayNumber = it.coerceIn(0, 999)) }
         taskRepository.update(t)
         return ok(toolCallId, "updated_task", mapOf("id" to id.toString()))
     }

@@ -3,6 +3,8 @@ package com.dailycurator.ui.screens.tasks
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,6 +29,7 @@ import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.ViewWeek
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -50,6 +54,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,10 +64,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.dailycurator.data.model.PriorityTask
 import com.dailycurator.data.model.Urgency
 import com.dailycurator.ui.components.DurationPresetSelector
-import com.dailycurator.ui.components.OutlinedPickerButton
 import com.dailycurator.ui.components.PickDateDialog
 import com.dailycurator.ui.components.PickTimeDialog
 import com.dailycurator.ui.components.PriorityItem
+import com.dailycurator.ui.components.resolvedTaskListNumber
+import com.dailycurator.ui.components.tasksSortedForListNumber
 import com.dailycurator.ui.components.formatDurationMinutes
 import com.dailycurator.ui.theme.AccentGreen
 import com.dailycurator.ui.theme.AccentRed
@@ -86,6 +92,7 @@ fun TasksScreen(
     viewModel: TasksViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val orderedDayTasks = remember(state.tasks) { tasksSortedForListNumber(state.tasks) }
     var showAddDialog by remember { mutableStateOf(false) }
     var taskToEdit by remember { mutableStateOf<PriorityTask?>(null) }
     var showJumpDatePicker by remember { mutableStateOf(false) }
@@ -112,11 +119,11 @@ fun TasksScreen(
                 showAddDialog = false
                 taskToEdit = null
             },
-            onConfirm = { title, date, start, end, urgency, isTop5, note ->
+            onConfirm = { title, date, start, end, urgency, isTop5, isMustDo, displayNumber, note ->
                 if (taskToEdit == null) {
-                    viewModel.addTask(title, date, start, end, urgency, isTop5, note)
+                    viewModel.addTask(title, date, start, end, urgency, isTop5, isMustDo, displayNumber, note)
                 } else {
-                    viewModel.updateTask(taskToEdit!!, title, date, start, end, urgency, isTop5, note)
+                    viewModel.updateTask(taskToEdit!!, title, date, start, end, urgency, isTop5, isMustDo, displayNumber, note)
                 }
                 showAddDialog = false
                 taskToEdit = null
@@ -254,6 +261,7 @@ fun TasksScreen(
                         items(state.tasks, key = { it.id }) { task ->
                             TaskRow(
                                 task = task,
+                                listNumber = resolvedTaskListNumber(task, orderedDayTasks),
                                 viewModel = viewModel,
                                 onEdit = { taskToEdit = task },
                                 onStartPomodoro = {
@@ -288,6 +296,7 @@ fun TasksScreen(
                             items(tasks, key = { it.id }) { task ->
                                 TaskRow(
                                     task = task,
+                                    listNumber = resolvedTaskListNumber(task, orderedDayTasks),
                                     viewModel = viewModel,
                                     onEdit = { taskToEdit = task },
                                     onStartPomodoro = {
@@ -498,6 +507,7 @@ private fun EmptyTasksHint(modifier: Modifier = Modifier) {
 @Composable
 private fun TaskRow(
     task: PriorityTask,
+    listNumber: Int,
     viewModel: TasksViewModel,
     onEdit: () -> Unit,
     onStartPomodoro: () -> Unit,
@@ -509,6 +519,7 @@ private fun TaskRow(
     ) { t ->
         PriorityItem(
             task = t,
+            listNumber = listNumber,
             onToggleDone = { viewModel.toggleTaskDone(t) },
             onStartPomodoro = if (t.id > 0L) onStartPomodoro else null,
             modifier = Modifier
@@ -567,7 +578,7 @@ private fun ManageTaskDialog(
     task: PriorityTask?,
     defaultListDate: LocalDate,
     onDismiss: () -> Unit,
-    onConfirm: (String, LocalDate, LocalTime, LocalTime, Urgency, Boolean, String?) -> Unit,
+    onConfirm: (String, LocalDate, LocalTime, LocalTime, Urgency, Boolean, Boolean, Int, String?) -> Unit,
     onStartPomodoro: (() -> Unit)? = null,
 ) {
     var title by remember(task?.id) { mutableStateOf(task?.title ?: "") }
@@ -591,8 +602,17 @@ private fun ManageTaskDialog(
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     var urgency by remember(task?.id) { mutableStateOf(task?.urgency ?: Urgency.GREEN) }
-    var isTop5 by remember(task?.id) { mutableStateOf(task?.rank == 1) }
+    var isTop5 by remember(task?.id) { mutableStateOf(task?.isTopFive == true) }
+    var isMustDo by remember(task?.id) { mutableStateOf(task?.isMustDo == true) }
+    var listNumberText by remember(task?.id) {
+        mutableStateOf(
+            if (task != null && task.displayNumber > 0) task.displayNumber.toString() else "",
+        )
+    }
     var titleError by remember { mutableStateOf(false) }
+
+    val dialogScroll = rememberScrollState()
+    val dialogMaxHeight = (LocalConfiguration.current.screenHeightDp.dp * 0.58f)
 
     val endTime = remember(startTime, durationMinutes) {
         startTime.plusMinutes(durationMinutes.toLong())
@@ -621,7 +641,13 @@ private fun ManageTaskDialog(
             )
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = dialogMaxHeight)
+                    .verticalScroll(dialogScroll),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 androidx.compose.material3.OutlinedTextField(
                     value = title,
                     onValueChange = { title = it; titleError = false },
@@ -636,22 +662,62 @@ private fun ManageTaskDialog(
                     label = { androidx.compose.material3.Text("Notes / Description") },
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedPickerButton(
-                    text = "Date: ${selectedDate.format(dateFmt)}",
-                    onClick = { showDatePicker = true },
-                )
-                OutlinedPickerButton(
-                    text = "Start: ${startTime.format(DateTimeFormatter.ofPattern("HH:mm"))}",
-                    onClick = { showTimePicker = true },
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = { showDatePicker = true }) {
+                        Icon(
+                            Icons.Default.CalendarMonth,
+                            contentDescription = "Pick date",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    Text(
+                        selectedDate.format(dateFmt),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { showDatePicker = true },
+                    )
+                    IconButton(onClick = { showTimePicker = true }) {
+                        Icon(
+                            Icons.Default.Schedule,
+                            contentDescription = "Pick start time",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    Text(
+                        startTime.format(DateTimeFormatter.ofPattern("HH:mm")),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.clickable { showTimePicker = true },
+                    )
+                }
                 DurationPresetSelector(
                     selectedMinutes = durationMinutes,
                     onMinutesSelected = { durationMinutes = it },
+                    useCompactTaskRow = true,
                 )
                 Text(
                     "Ends at ${endTime.format(DateTimeFormatter.ofPattern("HH:mm"))} (${formatDurationMinutes(durationMinutes)})",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                androidx.compose.material3.OutlinedTextField(
+                    value = listNumberText,
+                    onValueChange = { v ->
+                        if (v.length <= 3 && v.all { it.isDigit() }) listNumberText = v
+                    },
+                    label = { androidx.compose.material3.Text("List # (optional)") },
+                    placeholder = { androidx.compose.material3.Text("Auto") },
+                    supportingText = {
+                        androidx.compose.material3.Text(
+                            "Leave blank for 1, 2, 3… by rank and start time for this day.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 Text("Priority", style = MaterialTheme.typography.labelMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -677,9 +743,29 @@ private fun ManageTaskDialog(
                         )
                     }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top,
+                ) {
                     androidx.compose.material3.Checkbox(checked = isTop5, onCheckedChange = { isTop5 = it })
-                    Text("Mark as Top 5 Priority", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "Mark as Top 5 Priority",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    androidx.compose.material3.Checkbox(checked = isMustDo, onCheckedChange = { isMustDo = it })
+                    Text(
+                        "Must-do (meals, sleep, etc.). Not counted as productive time.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
                 if (task != null && task.id > 0L && onStartPomodoro != null) {
                     Spacer(Modifier.height(8.dp))
@@ -702,6 +788,7 @@ private fun ManageTaskDialog(
                         titleError = true
                         return@Button
                     }
+                    val displayNumber = listNumberText.toIntOrNull()?.coerceIn(1, 999) ?: 0
                     onConfirm(
                         title.trim(),
                         selectedDate,
@@ -709,6 +796,8 @@ private fun ManageTaskDialog(
                         endTime,
                         urgency,
                         isTop5,
+                        isMustDo,
+                        displayNumber,
                         note.takeIf { it.isNotBlank() },
                     )
                 },

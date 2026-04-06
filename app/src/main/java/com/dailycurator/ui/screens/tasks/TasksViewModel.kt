@@ -125,10 +125,12 @@ class TasksViewModel @Inject constructor(
         endTime: LocalTime,
         urgency: Urgency,
         isTop5: Boolean,
+        isMustDo: Boolean,
+        displayNumber: Int,
         note: String?,
     ) = viewModelScope.launch {
         val dayTasks = repo.getTasksForDate(date).first()
-        val nextRank = if (isTop5) 1 else ((dayTasks.maxOfOrNull { it.rank } ?: 0) + 1)
+        val nextRank = (dayTasks.maxOfOrNull { it.rank } ?: 0) + 1
         val newId = repo.insert(
             PriorityTask(
                 rank = nextRank,
@@ -137,6 +139,9 @@ class TasksViewModel @Inject constructor(
                 endTime = endTime,
                 statusNote = note,
                 urgency = urgency,
+                isTopFive = isTop5,
+                isMustDo = isMustDo,
+                displayNumber = displayNumber.coerceIn(0, 999),
                 date = date,
             ),
         )
@@ -151,16 +156,19 @@ class TasksViewModel @Inject constructor(
         endTime: LocalTime,
         urgency: Urgency,
         isTop5: Boolean,
+        isMustDo: Boolean,
+        displayNumber: Int,
         note: String?,
     ) = viewModelScope.launch {
-        val updatedRank = if (isTop5) 1 else task.rank.coerceAtLeast(2)
         val updated = task.copy(
             title = title,
             date = date,
             startTime = startTime,
             endTime = endTime,
             urgency = urgency,
-            rank = updatedRank,
+            isTopFive = isTop5,
+            isMustDo = isMustDo,
+            displayNumber = displayNumber.coerceIn(0, 999),
             statusNote = note,
         )
         repo.update(updated)

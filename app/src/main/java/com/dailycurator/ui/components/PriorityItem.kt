@@ -24,9 +24,21 @@ import com.dailycurator.data.model.PriorityTask
 import com.dailycurator.data.model.Urgency
 import com.dailycurator.ui.theme.*
 
+/** Day-wide order for auto list numbers: rank, then start time, then stable id. */
+fun tasksSortedForListNumber(tasks: List<PriorityTask>): List<PriorityTask> =
+    tasks.sortedWith(compareBy({ it.rank }, { it.startTime }, { it.id }))
+
+/** [PriorityTask.displayNumber] > 0 overrides; otherwise 1-based index in [orderedForDay]. */
+fun resolvedTaskListNumber(task: PriorityTask, orderedForDay: List<PriorityTask>): Int {
+    if (task.displayNumber > 0) return task.displayNumber.coerceIn(1, 999)
+    val idx = orderedForDay.indexOfFirst { it.id == task.id }
+    return if (idx >= 0) idx + 1 else 1
+}
+
 @Composable
 fun PriorityItem(
     task: PriorityTask,
+    listNumber: Int,
     onToggleDone: () -> Unit,
     modifier: Modifier = Modifier,
     onStartPomodoro: (() -> Unit)? = null,
@@ -59,15 +71,15 @@ fun PriorityItem(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Rank number
+                // List # (rank ≠ display order)
                 Text(
-                    text = "%02d".format(task.rank),
+                    text = if (listNumber in 1..99) "%02d".format(listNumber) else listNumber.toString(),
                     style = MaterialTheme.typography.labelSmall.copy(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Bold,
                         fontSize = 11.sp
                     ),
-                    modifier = Modifier.width(22.dp)
+                    modifier = Modifier.widthIn(min = 22.dp, max = 36.dp)
                 )
                 Spacer(Modifier.width(8.dp))
                 // Content
@@ -81,6 +93,16 @@ fun PriorityItem(
                             },
                             textDecoration = if (task.isDone) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
                         ))
+                    if (task.isMustDo) {
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            "Must-do",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold,
+                            ),
+                        )
+                    }
                     Spacer(Modifier.height(2.dp))
                     val subtitle = buildString {
                         append("${task.startTime} - ${task.endTime}")

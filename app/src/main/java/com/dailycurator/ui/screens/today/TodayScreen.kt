@@ -1,6 +1,10 @@
 package com.dailycurator.ui.screens.today
 
 import androidx.compose.animation.*
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -11,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,7 +31,9 @@ import com.dailycurator.ui.theme.*
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodayScreen(
     onNavigateToPomodoro: () -> Unit = {},
@@ -37,6 +44,23 @@ fun TodayScreen(
     val todayLabel = LocalDate.now().format(DateTimeFormatter.ofPattern("MMM d"))
     var assistantExpanded by remember { mutableStateOf(true) }
     var weeklyInsightExpanded by remember { mutableStateOf(true) }
+    var top5Expanded by remember { mutableStateOf(true) }
+    var showCompletedPriorities by rememberSaveable { mutableStateOf(true) }
+
+    val orderedTasksForNumbers = remember(state.tasks) { tasksSortedForListNumber(state.tasks) }
+
+    val topPriorityTasks = remember(state.tasks, showCompletedPriorities) {
+        val visible = if (showCompletedPriorities) state.tasks else state.tasks.filter { !it.isDone }
+        visible
+            .filter { it.isTopFive }
+            .sortedWith(compareBy<PriorityTask> { it.rank }.thenBy { it.startTime }.thenBy { it.id })
+    }
+
+    val mustDoUndoneMinutes = remember(state.tasks) {
+        state.tasks
+            .filter { it.isMustDo && !it.isDone }
+            .sumOf { ChronoUnit.MINUTES.between(it.startTime, it.endTime).toInt().coerceAtLeast(0) }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -77,6 +101,7 @@ fun TodayScreen(
                 windowStart = state.dayWindowStart,
                 windowEnd = state.dayWindowEnd,
                 modifier = Modifier.padding(horizontal = 20.dp),
+                mustDoUndoneMinutes = mustDoUndoneMinutes,
             )
             Spacer(Modifier.height(16.dp))
         }
@@ -106,34 +131,86 @@ fun TodayScreen(
             }
         }
 
-        // ── Top 5 Priorities header
+        // ── Top 5 Priorities (collapsible; ranks 1–5; optional hide completed)
         item {
-            Text("Top 5 Priorities",
-                style = MaterialTheme.typography.titleLarge.copy(
-                    color = MaterialTheme.colorScheme.onBackground),
-                modifier = Modifier.padding(horizontal = 20.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { top5Expanded = !top5Expanded }
+                        .padding(top = 6.dp, bottom = 6.dp, end = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "Top 5 Priorities",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            color = MaterialTheme.colorScheme.onBackground,
+                        ),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Icon(
+                        imageVector = if (top5Expanded) {
+                            Icons.Default.ExpandLess
+                        } else {
+                            Icons.Default.ExpandMore
+                        },
+                        contentDescription = if (top5Expanded) "Collapse priorities" else "Expand priorities",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
+                FilterChip(
+                    selected = showCompletedPriorities,
+                    onClick = { showCompletedPriorities = !showCompletedPriorities },
+                    label = { Text("Show done") },
+                )
+            }
             Spacer(Modifier.height(10.dp))
         }
 
-        // ── Priority items
-        items(state.tasks, key = { it.id }) { task ->
-            PriorityItem(
-                task = task,
-                onToggleDone = { viewModel.toggleTaskDone(task) },
-                onStartPomodoro = if (task.id > 0L) {
-                    {
-                        viewModel.startPomodoroForTask(task)
-                        onNavigateToPomodoro()
+        item {
+            AnimatedVisibility(
+                visible = top5Expanded,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+            ) {
+                Column {
+                    if (topPriorityTasks.isEmpty()) {
+                        Text(
+                            "No tasks marked as Top 5. Open Tasks and edit a task to include it here.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 20.dp),
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    } else {
+                        topPriorityTasks.forEach { task ->
+                            PriorityItem(
+                                task = task,
+                                listNumber = resolvedTaskListNumber(task, orderedTasksForNumbers),
+                                onToggleDone = { viewModel.toggleTaskDone(task) },
+                                onStartPomodoro = if (task.id > 0L) {
+                                    {
+                                        viewModel.startPomodoroForTask(task)
+                                        onNavigateToPomodoro()
+                                    }
+                                } else {
+                                    null
+                                },
+                                modifier = Modifier.padding(horizontal = 20.dp),
+                            )
+                            Spacer(Modifier.height(8.dp))
+                        }
                     }
-                } else {
-                    null
-                },
-                modifier = Modifier.padding(horizontal = 20.dp)
-            )
-            Spacer(Modifier.height(8.dp))
+                }
+            }
         }
-
-
 
         // ── Weekly Goals section
         item {

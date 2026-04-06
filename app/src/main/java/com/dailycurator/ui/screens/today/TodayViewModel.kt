@@ -187,6 +187,7 @@ class TodayViewModel @Inject constructor(
                 startTime = startTime,
                 endTime = endTime,
                 urgency = urgency,
+                isTopFive = false,
                 date = today
             )
         )
@@ -217,9 +218,9 @@ class TodayViewModel @Inject constructor(
             id = task.id, title = task.title,
             startTime = task.startTime, endTime = task.endTime,
             location = task.statusNote,
-            tags = if (task.urgency == Urgency.RED) listOf("HIGH") else if (task.rank == 1) listOf("FOCUS", "HIGH") else emptyList(),
+            tags = if (task.urgency == Urgency.RED) listOf("HIGH") else if (task.isTopFive) listOf("FOCUS", "HIGH") else emptyList(),
             priority = if (task.urgency == Urgency.RED) EventPriority.HIGH else EventPriority.MEDIUM,
-            isProtected = task.rank == 1,
+            isProtected = task.isTopFive,
             date = task.date
         )
     }
