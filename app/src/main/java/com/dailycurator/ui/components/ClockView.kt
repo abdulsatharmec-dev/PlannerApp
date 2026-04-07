@@ -137,17 +137,26 @@ fun ClockView(
     modifier: Modifier = Modifier,
     windowStart: LocalTime = LocalTime.of(4, 0),
     windowEnd: LocalTime = LocalTime.of(22, 0),
+    /** When false, hides live clock hand / NOW styling (browsing another calendar day). */
+    useLiveNowIndicator: Boolean = true,
+    /** Shown in the center when [useLiveNowIndicator] is false (e.g. formatted schedule date). */
+    scheduleDayLabel: String? = null,
 ) {
     var now by remember { mutableStateOf(LocalTime.now()) }
-    LaunchedEffect(Unit) {
+    val nowStatic = remember { LocalTime.of(12, 0) }
+    LaunchedEffect(useLiveNowIndicator) {
+        if (!useLiveNowIndicator) return@LaunchedEffect
         while (true) {
-            kotlinx.coroutines.delay(30_000)
             now = LocalTime.now()
+            kotlinx.coroutines.delay(30_000)
         }
     }
 
-    val (displayStart, displayEnd) = remember(now, windowStart, windowEnd) {
-        displayClockWindow(windowStart, windowEnd, now)
+    val clockNow = if (useLiveNowIndicator) now else nowStatic
+
+    val (displayStart, displayEnd) = remember(clockNow, windowStart, windowEnd, useLiveNowIndicator) {
+        if (useLiveNowIndicator) displayClockWindow(windowStart, windowEnd, clockNow)
+        else minTime(windowStart, windowEnd) to maxTime(windowStart, windowEnd)
     }
 
     val windowMinRaw = minutesOfDay(displayStart)
@@ -228,20 +237,22 @@ fun ClockView(
                         style = Stroke(width = trackStroke, cap = StrokeCap.Round),
                     )
 
-                    val nowAngle = timeToAngle(now)
-                    val endAngle = timeToAngle(displayEnd)
-                    var sweepFuture = endAngle - nowAngle
-                    if (sweepFuture < 0f) sweepFuture += 360f
-                    if (sweepFuture > 0.5f) {
-                        drawArc(
-                            color = trackActive,
-                            startAngle = nowAngle,
-                            sweepAngle = sweepFuture,
-                            useCenter = false,
-                            topLeft = Offset(center.x - outerR, center.y - outerR),
-                            size = Size(outerR * 2, outerR * 2),
-                            style = Stroke(width = trackStroke, cap = StrokeCap.Round),
-                        )
+                    if (useLiveNowIndicator) {
+                        val nowAngle = timeToAngle(clockNow)
+                        val endAngle = timeToAngle(displayEnd)
+                        var sweepFuture = endAngle - nowAngle
+                        if (sweepFuture < 0f) sweepFuture += 360f
+                        if (sweepFuture > 0.5f) {
+                            drawArc(
+                                color = trackActive,
+                                startAngle = nowAngle,
+                                sweepAngle = sweepFuture,
+                                useCenter = false,
+                                topLeft = Offset(center.x - outerR, center.y - outerR),
+                                size = Size(outerR * 2, outerR * 2),
+                                style = Stroke(width = trackStroke, cap = StrokeCap.Round),
+                            )
+                        }
                     }
 
                     visibleEvents.forEachIndexed { i, (ev, range) ->
@@ -250,7 +261,7 @@ fun ClockView(
                         val endA = timeToAngle(ee)
                         val sweep = (endA - startAngle).let { if (it <= 0f) it + 360f else it }
                             .coerceAtLeast(5f)
-                        val a = eventArcAlpha(ev, now)
+                        val a = if (useLiveNowIndicator) eventArcAlpha(ev, clockNow) else 0.88f
                         drawArc(
                             color = arcColors[i % arcColors.size].copy(alpha = a),
                             startAngle = startAngle,
@@ -262,31 +273,36 @@ fun ClockView(
                         )
                     }
 
-                    val handRad = Math.toRadians(nowAngle.toDouble())
-                    val handLen = innerR * 0.92f
-                    drawLine(
-                        color = NowRed.copy(alpha = 0.35f),
-                        start = center,
-                        end = Offset(
-                            center.x + (handLen + 3.dp.toPx()) * cos(handRad).toFloat(),
-                            center.y + (handLen + 3.dp.toPx()) * sin(handRad).toFloat(),
-                        ),
-                        strokeWidth = 8.dp.toPx(),
-                        cap = StrokeCap.Round,
-                    )
-                    drawLine(
-                        color = NowRed,
-                        start = center,
-                        end = Offset(
-                            center.x + handLen * cos(handRad).toFloat(),
-                            center.y + handLen * sin(handRad).toFloat(),
-                        ),
-                        strokeWidth = 4.dp.toPx(),
-                        cap = StrokeCap.Round,
-                    )
+                    if (useLiveNowIndicator) {
+                        val nowAngle = timeToAngle(clockNow)
+                        val handRad = Math.toRadians(nowAngle.toDouble())
+                        val handLen = innerR * 0.92f
+                        drawLine(
+                            color = NowRed.copy(alpha = 0.35f),
+                            start = center,
+                            end = Offset(
+                                center.x + (handLen + 3.dp.toPx()) * cos(handRad).toFloat(),
+                                center.y + (handLen + 3.dp.toPx()) * sin(handRad).toFloat(),
+                            ),
+                            strokeWidth = 8.dp.toPx(),
+                            cap = StrokeCap.Round,
+                        )
+                        drawLine(
+                            color = NowRed,
+                            start = center,
+                            end = Offset(
+                                center.x + handLen * cos(handRad).toFloat(),
+                                center.y + handLen * sin(handRad).toFloat(),
+                            ),
+                            strokeWidth = 4.dp.toPx(),
+                            cap = StrokeCap.Round,
+                        )
 
-                    drawCircle(color = NowRed, radius = 8.dp.toPx(), center = center)
-                    drawCircle(color = centerDotColor, radius = 4.5.dp.toPx(), center = center)
+                        drawCircle(color = NowRed, radius = 8.dp.toPx(), center = center)
+                        drawCircle(color = centerDotColor, radius = 4.5.dp.toPx(), center = center)
+                    } else {
+                        drawCircle(color = centerDotColor, radius = 6.dp.toPx(), center = center)
+                    }
 
                     // Major ticks + pinned labels (sparse, not 24h)
                     val native = drawContext.canvas.nativeCanvas
@@ -300,7 +316,8 @@ fun ClockView(
                         val ang = Math.toRadians(timeToAngle(tick).toDouble())
                         val outer = outerR - trackStroke / 2f - 1.dp.toPx()
                         val inner = outer - 12.dp.toPx()
-                        val isNearNow = abs(minutesOfDay(tick) - minutesOfDay(now)) < 75f
+                        val isNearNow = useLiveNowIndicator &&
+                            abs(minutesOfDay(tick) - minutesOfDay(clockNow)) < 75f
                         val tc = if (isNearNow) tickMajor else tickMajor.copy(alpha = 0.72f)
                         drawLine(
                             color = tc,
@@ -329,27 +346,42 @@ fun ClockView(
                 // Center readout (above canvas z-order handled by draw order — keep in Box on top)
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            now.format(centerTimeFmt),
-                            style = MaterialTheme.typography.displayLarge.copy(
-                                color = Primary,
-                                fontSize = 28.sp,
-                                fontWeight = FontWeight.Bold,
-                            ),
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Box(
-                            modifier = Modifier
-                                .background(NowRed, RoundedCornerShape(6.dp))
-                                .padding(horizontal = 10.dp, vertical = 4.dp),
-                        ) {
+                        if (useLiveNowIndicator) {
                             Text(
-                                "NOW",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = Color.White,
+                                clockNow.format(centerTimeFmt),
+                                style = MaterialTheme.typography.displayLarge.copy(
+                                    color = Primary,
+                                    fontSize = 28.sp,
                                     fontWeight = FontWeight.Bold,
-                                    letterSpacing = 1.sp,
                                 ),
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Box(
+                                modifier = Modifier
+                                    .background(NowRed, RoundedCornerShape(6.dp))
+                                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                            ) {
+                                Text(
+                                    "NOW",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 1.sp,
+                                    ),
+                                )
+                            }
+                        } else {
+                            Text(
+                                scheduleDayLabel.orEmpty().ifBlank { "—" },
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    color = Primary,
+                                    fontWeight = FontWeight.Bold,
+                                ),
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "That day",
+                                style = MaterialTheme.typography.labelSmall.copy(color = metaLabel),
                             )
                         }
                     }

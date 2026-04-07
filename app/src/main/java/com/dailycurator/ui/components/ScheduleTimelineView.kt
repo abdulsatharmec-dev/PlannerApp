@@ -8,6 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -41,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import com.dailycurator.data.model.ScheduleEvent
 import com.dailycurator.ui.theme.NowRed
 import kotlinx.coroutines.delay
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
@@ -48,7 +50,7 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 private val TimelineViewportHeight = 400.dp
-private const val BaseHourDp = 52f
+private const val BaseHourDp = 72f
 private val BaseDpPerMinute: Float get() = BaseHourDp / 60f
 
 private fun minutesOfDay(t: LocalTime): Int = t.hour * 60 + t.minute
@@ -97,8 +99,11 @@ private fun countTasksOverlappingSlice(
     es.isBefore(segEnd) && ee.isAfter(segStart)
 }
 
-private fun densityExpansion(overlapCount: Int): Float =
-    if (overlapCount <= 1) 1f else 1f + 0.45f * (overlapCount - 1)
+private fun densityExpansion(overlapCount: Int): Float {
+    if (overlapCount <= 1) return 1f
+    val k = (overlapCount - 1).coerceAtMost(8)
+    return 1f + 0.78f * k + 0.11f * k * k
+}
 
 private data class TimelineSlice(
     val segStart: LocalTime,
@@ -209,6 +214,9 @@ fun ScheduleTimelineView(
     windowStart: LocalTime,
     windowEnd: LocalTime,
     modifier: Modifier = Modifier,
+    /** When false, hides “now” marker and scroll-to-now (e.g. browsing another day). */
+    showNowIndicator: Boolean = true,
+    scheduleDate: LocalDate = LocalDate.now(),
 ) {
     val labelFmt = remember { DateTimeFormatter.ofPattern("h:mm a") }
     val minuteFmt = remember { DateTimeFormatter.ofPattern("h:mm") }
@@ -233,6 +241,10 @@ fun ScheduleTimelineView(
     val laneMap = remember(events, windowStart, windowEnd) {
         assignOverlapLanes(events, windowStart, windowEnd)
     }
+    val maxLanes = remember(laneMap) {
+        if (laneMap.isEmpty()) 1
+        else laneMap.values.maxOf { it.maxLane + 1 }.coerceAtLeast(1)
+    }
 
     val sortedEvents = remember(events) {
         events.sortedWith(
@@ -246,9 +258,9 @@ fun ScheduleTimelineView(
     val scrollState = rememberScrollState()
 
     val nowM = minutesOfDayFloat(now)
-    var didSnapToNow by remember(windowStart, windowEnd) { mutableStateOf(false) }
-    LaunchedEffect(totalHeightInner, slices.size, windowStart, windowEnd) {
-        if (didSnapToNow || slices.isEmpty()) return@LaunchedEffect
+    var didSnapToNow by remember(windowStart, windowEnd, scheduleDate) { mutableStateOf(false) }
+    LaunchedEffect(totalHeightInner, slices.size, windowStart, windowEnd, showNowIndicator, scheduleDate) {
+        if (!showNowIndicator || didSnapToNow || slices.isEmpty()) return@LaunchedEffect
         delay(48)
         val maxScroll = scrollState.maxValue
         if (maxScroll <= 0) {
@@ -300,7 +312,9 @@ fun ScheduleTimelineView(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier
                                 .offset { IntOffset(0, with(density) { yPx.dp.roundToPx() } - 6.dp.roundToPx()) }
-                                .alpha(labelAlphaForHourTick(tick, now)),
+                                .alpha(
+                                    if (showNowIndicator) labelAlphaForHourTick(tick, now) else 0.84f,
+                                ),
                         )
                     }
                     slices.filter { it.overlapCount >= 2 }.forEach { slice ->
@@ -325,105 +339,133 @@ fun ScheduleTimelineView(
                     }
                 }
 
+                val hTrackScroll = rememberScrollState()
                 BoxWithConstraints(
                     Modifier
                         .weight(1f)
                         .fillMaxHeight(),
                 ) {
-                    val trackWidth = maxWidth
-                    val lineColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.32f)
-                    val currentHourFill = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-
-                    Canvas(Modifier.fillMaxWidth().fillMaxHeight()) {
-                        hourTicks.forEach { tick ->
-                            val yDp = yAtMinute(slices, minutesOfDayFloat(tick))
-                            val yPx = yDp.dp.toPx()
-                            drawLine(
-                                color = lineColor,
-                                start = Offset(0f, yPx),
-                                end = Offset(size.width, yPx),
-                                strokeWidth = 1.dp.toPx(),
-                            )
-                        }
-                    }
-
-                    if (nowM > startM && nowM < endM) {
-                        val hourFloor = ((nowM / 60f).toInt() * 60).coerceAtLeast(startM)
-                        val hourCeil = (hourFloor + 60).coerceAtMost(endM)
-                        val top = yAtMinute(slices, hourFloor.toFloat())
-                        val bottom = yAtMinute(slices, hourCeil.toFloat())
-                        val h = (bottom - top).coerceAtLeast(8f)
-                        Box(
+                    val viewportW = maxWidth
+                    val gapTrack = 6.dp
+                    val minSlotW = 116.dp
+                    val minContentW = minSlotW * maxLanes + gapTrack * (maxLanes + 1)
+                    val contentW = maxOf(viewportW, minContentW)
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(hTrackScroll),
+                    ) {
+                        BoxWithConstraints(
                             Modifier
-                                .fillMaxWidth()
-                                .offset(y = top.dp)
-                                .height(h.dp)
-                                .background(currentHourFill, RoundedCornerShape(8.dp)),
-                        )
-                    }
-
-                    sortedEvents.forEach { event ->
-                        val range = clipEventToWindow(event, windowStart, windowEnd) ?: return@forEach
-                        val (es, ee) = range
-                        val esM = minutesOfDayFloat(es)
-                        val eeM = minutesOfDayFloat(ee)
-                        val topY = yAtMinute(slices, esM)
-                        val bottomY = yAtMinute(slices, eeM)
-                        val heightY = (bottomY - topY).coerceAtLeast(52f)
-                        val lane = laneMap[event.id] ?: LaneInfo(0, 0)
-                        val nLanes = (lane.maxLane + 1).coerceAtLeast(1)
-                        val gap = 4.dp
-                        val usable = trackWidth - gap * (nLanes + 1)
-                        val slotW = usable / nLanes
-                        val xOff = gap + (slotW + gap) * lane.lane.toFloat()
-
-                        TimelineEventCard(
-                            event = event,
-                            contentAlpha = eventTemporalAlpha(event, now),
-                            accentColorOverride = scheduleTaskAccentColor(event.id),
-                            showDurationMinutes = true,
-                            modifier = Modifier
-                                .width(slotW)
-                                .offset(x = xOff, y = topY.dp)
-                                .height(heightY.dp),
-                        )
-                    }
-
-                    if (nowM >= startM && nowM <= endM) {
-                        val nowY = yAtMinute(slices, nowM)
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .offset(y = (nowY - 5f).dp)
-                                .alpha(pulseAlpha),
+                                .width(contentW)
+                                .fillMaxHeight(),
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(10.dp)
-                                    .background(NowRed.copy(alpha = 0.25f), RoundedCornerShape(5.dp)),
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(4.dp)
-                                    .background(NowRed, RoundedCornerShape(2.dp)),
-                            )
-                        }
-                        Box(
-                            modifier = Modifier
-                                .offset(x = 6.dp, y = (nowY - 11f).dp)
-                                .background(NowRed, RoundedCornerShape(4.dp))
-                                .padding(horizontal = 6.dp, vertical = 3.dp),
-                        ) {
-                            Text(
-                                text = "NOW",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 9.sp,
-                                ),
-                            )
+                            val trackWidth = maxWidth
+                            val lineColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.32f)
+                            val currentHourFill = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+
+                            Canvas(Modifier.fillMaxWidth().fillMaxHeight()) {
+                                hourTicks.forEach { tick ->
+                                    val yDp = yAtMinute(slices, minutesOfDayFloat(tick))
+                                    val yPx = yDp.dp.toPx()
+                                    drawLine(
+                                        color = lineColor,
+                                        start = Offset(0f, yPx),
+                                        end = Offset(size.width, yPx),
+                                        strokeWidth = 1.dp.toPx(),
+                                    )
+                                }
+                            }
+
+                            if (showNowIndicator && nowM > startM && nowM < endM) {
+                                val hourFloor = ((nowM / 60f).toInt() * 60).coerceAtLeast(startM)
+                                val hourCeil = (hourFloor + 60).coerceAtMost(endM)
+                                val top = yAtMinute(slices, hourFloor.toFloat())
+                                val bottom = yAtMinute(slices, hourCeil.toFloat())
+                                val h = (bottom - top).coerceAtLeast(8f)
+                                Box(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .offset(y = top.dp)
+                                        .height(h.dp)
+                                        .background(currentHourFill, RoundedCornerShape(8.dp)),
+                                )
+                            }
+
+                            sortedEvents.forEach { event ->
+                                val range = clipEventToWindow(event, windowStart, windowEnd) ?: return@forEach
+                                val (es, ee) = range
+                                val esM = minutesOfDayFloat(es)
+                                val eeM = minutesOfDayFloat(ee)
+                                val topY = yAtMinute(slices, esM)
+                                val bottomY = yAtMinute(slices, eeM)
+                                val minH = when {
+                                    maxLanes >= 4 -> 74f
+                                    maxLanes >= 3 -> 66f
+                                    maxLanes >= 2 -> 58f
+                                    else -> 52f
+                                }
+                                val heightY = (bottomY - topY).coerceAtLeast(minH)
+                                val lane = laneMap[event.id] ?: LaneInfo(0, 0)
+                                val nLanes = (lane.maxLane + 1).coerceAtLeast(1)
+                                val gap = gapTrack
+                                val usable = trackWidth - gap * (nLanes + 1)
+                                val slotW = usable / nLanes
+                                val xOff = gap + (slotW + gap) * lane.lane.toFloat()
+
+                                TimelineEventCard(
+                                    event = event,
+                                    contentAlpha = if (showNowIndicator) {
+                                        eventTemporalAlpha(event, now)
+                                    } else {
+                                        0.94f
+                                    },
+                                    accentColorOverride = scheduleTaskAccentColor(event.id),
+                                    showDurationMinutes = true,
+                                    modifier = Modifier
+                                        .width(slotW)
+                                        .offset(x = xOff, y = topY.dp)
+                                        .height(heightY.dp),
+                                )
+                            }
+
+                            if (showNowIndicator && nowM >= startM && nowM <= endM) {
+                                val nowY = yAtMinute(slices, nowM)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .offset(y = (nowY - 5f).dp)
+                                        .alpha(pulseAlpha),
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(10.dp)
+                                            .background(NowRed.copy(alpha = 0.25f), RoundedCornerShape(5.dp)),
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(4.dp)
+                                            .background(NowRed, RoundedCornerShape(2.dp)),
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .offset(x = 6.dp, y = (nowY - 11f).dp)
+                                        .background(NowRed, RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 6.dp, vertical = 3.dp),
+                                ) {
+                                    Text(
+                                        text = "NOW",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 9.sp,
+                                        ),
+                                    )
+                                }
+                            }
                         }
                     }
                 }

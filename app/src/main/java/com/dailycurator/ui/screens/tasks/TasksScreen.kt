@@ -30,9 +30,13 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.EventRepeat
 import androidx.compose.material.icons.filled.ViewWeek
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FloatingActionButton
@@ -62,7 +66,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.dailycurator.data.model.PriorityTask
+import com.dailycurator.data.model.TaskRepeatOption
 import com.dailycurator.data.model.Urgency
+import com.dailycurator.data.model.WeeklyGoal
 import com.dailycurator.ui.components.DurationPresetSelector
 import com.dailycurator.ui.components.PickDateDialog
 import com.dailycurator.ui.components.PickTimeDialog
@@ -115,15 +121,19 @@ fun TasksScreen(
         ManageTaskDialog(
             task = taskToEdit,
             defaultListDate = state.listDate,
+            activeGoals = state.activeGoals,
             onDismiss = {
                 showAddDialog = false
                 taskToEdit = null
             },
-            onConfirm = { title, date, start, end, urgency, isTop5, isMustDo, displayNumber, note ->
+            onConfirm = { title, date, start, end, urgency, isTop5, isMustDo, displayNumber, note, goalId, repeat, customRepeatDays ->
                 if (taskToEdit == null) {
-                    viewModel.addTask(title, date, start, end, urgency, isTop5, isMustDo, displayNumber, note)
+                    viewModel.addTask(
+                        title, date, start, end, urgency, isTop5, isMustDo, displayNumber, note, goalId,
+                        repeat, customRepeatDays,
+                    )
                 } else {
-                    viewModel.updateTask(taskToEdit!!, title, date, start, end, urgency, isTop5, isMustDo, displayNumber, note)
+                    viewModel.updateTask(taskToEdit!!, title, date, start, end, urgency, isTop5, isMustDo, displayNumber, note, goalId)
                 }
                 showAddDialog = false
                 taskToEdit = null
@@ -577,8 +587,9 @@ fun <T> SwipeToDeleteContainer(
 private fun ManageTaskDialog(
     task: PriorityTask?,
     defaultListDate: LocalDate,
+    activeGoals: List<WeeklyGoal>,
     onDismiss: () -> Unit,
-    onConfirm: (String, LocalDate, LocalTime, LocalTime, Urgency, Boolean, Boolean, Int, String?) -> Unit,
+    onConfirm: (String, LocalDate, LocalTime, LocalTime, Urgency, Boolean, Boolean, Int, String?, Long?, TaskRepeatOption, Int) -> Unit,
     onStartPomodoro: (() -> Unit)? = null,
 ) {
     var title by remember(task?.id) { mutableStateOf(task?.title ?: "") }
@@ -609,6 +620,12 @@ private fun ManageTaskDialog(
             if (task != null && task.displayNumber > 0) task.displayNumber.toString() else "",
         )
     }
+    var linkedGoalId by remember(task?.id) { mutableStateOf<Long?>(task?.goalId) }
+    var goalMenuExpanded by remember { mutableStateOf(false) }
+    var repeatMenuExpanded by remember { mutableStateOf(false) }
+    var repeatOption by remember(task?.id, defaultListDate) { mutableStateOf(TaskRepeatOption.NONE) }
+    var customRepeatDaysText by remember(task?.id, defaultListDate) { mutableStateOf("3") }
+    val linkedGoalLabel = linkedGoalId?.let { id -> activeGoals.find { it.id == id }?.title } ?: "None"
     var titleError by remember { mutableStateOf(false) }
 
     val dialogScroll = rememberScrollState()
@@ -703,6 +720,88 @@ private fun ManageTaskDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (task == null) {
+                    val repeatLabel = when (repeatOption) {
+                        TaskRepeatOption.NONE -> "Does not repeat"
+                        TaskRepeatOption.DAILY -> "Daily (14 days)"
+                        TaskRepeatOption.WEEKLY -> "Weekly (4 weeks)"
+                        TaskRepeatOption.CUSTOM -> "Custom interval"
+                    }
+                    ExposedDropdownMenuBox(
+                        expanded = repeatMenuExpanded,
+                        onExpandedChange = { repeatMenuExpanded = it },
+                    ) {
+                        androidx.compose.material3.OutlinedTextField(
+                            value = repeatLabel,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { androidx.compose.material3.Text("Repeat") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.EventRepeat,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            },
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = repeatMenuExpanded)
+                            },
+                            modifier = Modifier
+                                .menuAnchor()
+                                .fillMaxWidth(),
+                        )
+                        ExposedDropdownMenu(
+                            expanded = repeatMenuExpanded,
+                            onDismissRequest = { repeatMenuExpanded = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { androidx.compose.material3.Text("Does not repeat") },
+                                onClick = {
+                                    repeatOption = TaskRepeatOption.NONE
+                                    repeatMenuExpanded = false
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { androidx.compose.material3.Text("Daily") },
+                                onClick = {
+                                    repeatOption = TaskRepeatOption.DAILY
+                                    repeatMenuExpanded = false
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { androidx.compose.material3.Text("Weekly") },
+                                onClick = {
+                                    repeatOption = TaskRepeatOption.WEEKLY
+                                    repeatMenuExpanded = false
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { androidx.compose.material3.Text("Custom") },
+                                onClick = {
+                                    repeatOption = TaskRepeatOption.CUSTOM
+                                    repeatMenuExpanded = false
+                                },
+                            )
+                        }
+                    }
+                    if (repeatOption == TaskRepeatOption.CUSTOM) {
+                        androidx.compose.material3.OutlinedTextField(
+                            value = customRepeatDaysText,
+                            onValueChange = { v ->
+                                if (v.length <= 2 && v.all { it.isDigit() }) customRepeatDaysText = v
+                            },
+                            label = { androidx.compose.material3.Text("Every N days") },
+                            supportingText = {
+                                androidx.compose.material3.Text(
+                                    "2–30 days between each occurrence (up to 8 times).",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
                 androidx.compose.material3.OutlinedTextField(
                     value = listNumberText,
                     onValueChange = { v ->
@@ -719,6 +818,50 @@ private fun ManageTaskDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                ExposedDropdownMenuBox(
+                    expanded = goalMenuExpanded,
+                    onExpandedChange = { goalMenuExpanded = it },
+                ) {
+                    androidx.compose.material3.OutlinedTextField(
+                        value = linkedGoalLabel,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { androidx.compose.material3.Text("Linked Goal") },
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = goalMenuExpanded)
+                        },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth(),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = goalMenuExpanded,
+                        onDismissRequest = { goalMenuExpanded = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { androidx.compose.material3.Text("None") },
+                            onClick = {
+                                linkedGoalId = null
+                                goalMenuExpanded = false
+                            },
+                        )
+                        activeGoals.forEach { g ->
+                            DropdownMenuItem(
+                                text = {
+                                    androidx.compose.material3.Text(
+                                        g.title,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                },
+                                onClick = {
+                                    linkedGoalId = g.id
+                                    goalMenuExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
                 Text("Priority", style = MaterialTheme.typography.labelMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Urgency.entries.forEach { u ->
@@ -789,6 +932,7 @@ private fun ManageTaskDialog(
                         return@Button
                     }
                     val displayNumber = listNumberText.toIntOrNull()?.coerceIn(1, 999) ?: 0
+                    val customDays = customRepeatDaysText.toIntOrNull()?.coerceIn(2, 30) ?: 3
                     onConfirm(
                         title.trim(),
                         selectedDate,
@@ -799,6 +943,9 @@ private fun ManageTaskDialog(
                         isMustDo,
                         displayNumber,
                         note.takeIf { it.isNotBlank() },
+                        linkedGoalId,
+                        if (task == null) repeatOption else TaskRepeatOption.NONE,
+                        customDays,
                     )
                 },
             ) { Text("Save") }

@@ -20,6 +20,7 @@ import com.dailycurator.data.repository.GoalRepository
 import com.dailycurator.data.repository.HabitRepository
 import com.dailycurator.data.repository.JournalRepository
 import com.dailycurator.data.repository.PhoneUsageRepository
+import com.dailycurator.data.model.JournalAiChannel
 import com.dailycurator.data.repository.TaskRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -125,7 +126,10 @@ class ChatViewModel @Inject constructor(
             }
             is PendingChatDeletion.Goal -> {
                 val g = goalRepository.getById(p.id)
-                if (g != null) goalRepository.delete(g)
+                if (g != null) {
+                    taskRepository.clearGoalLinks(g.id)
+                    goalRepository.delete(g)
+                }
                 if (sessionAt == chatSession) {
                     chatRepository.appendMessage("Deleted goal \"${p.title}\".", false)
                 }
@@ -335,8 +339,15 @@ class ChatViewModel @Inject constructor(
         }
 
         if (prefs.isJournalSharedWithChat()) {
-            val journal = journalRepository.getRecentForAiContext(30)
-            sb.append("\n--- JOURNAL (recent, user-enabled for chat) ---\n")
+            val zone = ZoneId.systemDefault()
+            val journal = journalRepository.getJournalForAiChannel(
+                JournalAiChannel.AgentChat,
+                LocalDate.now(zone),
+                prefs.getJournalContextWindowDays(),
+                zone,
+                30,
+            )
+            sb.append("\n--- JOURNAL (within your date window; per-entry toggles apply) ---\n")
             sb.append(JournalContextFormatter.format(journal))
             sb.append("\n")
         }

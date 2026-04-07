@@ -3,27 +3,30 @@ package com.dailycurator.ui.screens.journal
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -34,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -41,6 +45,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,12 +58,21 @@ fun JournalEditorScreen(
     val title by viewModel.title.collectAsState()
     val body by viewModel.body.collectAsState()
     val ready by viewModel.ready.collectAsState()
+    val includeChat by viewModel.includeInAgentChat.collectAsState()
+    val includeAssistant by viewModel.includeInAssistantInsight.collectAsState()
+    val includeWeekly by viewModel.includeInWeeklyGoalsInsight.collectAsState()
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var validationError by remember { mutableStateOf(false) }
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showAiSettings by remember { mutableStateOf(false) }
 
     val gradient = diaryGradientBrush()
     val paper = diaryPaperColor()
     val ink = diaryInkColor()
+    val dateLine = remember(viewModel.isNewEntry) {
+        val fmt = DateTimeFormatter.ofPattern("EEEE, MMMM d")
+        Instant.now().atZone(ZoneId.systemDefault()).toLocalDate().format(fmt)
+    }
 
     if (showDeleteConfirm) {
         AlertDialog(
@@ -77,14 +93,50 @@ fun JournalEditorScreen(
         )
     }
 
+    if (showAiSettings) {
+        AlertDialog(
+            onDismissRequest = { showAiSettings = false },
+            title = { Text("AI sharing") },
+            text = {
+                Column {
+                    Text(
+                        "Matches Settings → Journal date window. Turn off to keep this entry out of that surface.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    RowSwitchRow(
+                        checked = includeChat,
+                        onCheckedChange = { viewModel.setIncludeInAgentChat(it) },
+                        label = "Include in agent chat",
+                    )
+                    RowSwitchRow(
+                        checked = includeAssistant,
+                        onCheckedChange = { viewModel.setIncludeInAssistantInsight(it) },
+                        label = "Include in assistant insight",
+                    )
+                    RowSwitchRow(
+                        checked = includeWeekly,
+                        onCheckedChange = { viewModel.setIncludeInWeeklyGoalsInsight(it) },
+                        label = "Include in weekly goals insight",
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAiSettings = false }) { Text("Done") }
+            },
+        )
+    }
+
     Scaffold(
+        modifier = Modifier.fillMaxSize(),
         containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        if (viewModel.isNewEntry) "New entry" else "Edit entry",
-                        style = MaterialTheme.typography.titleMedium,
+                        if (viewModel.isNewEntry) "Today" else "Entry",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                     )
                 },
                 navigationIcon = {
@@ -93,13 +145,31 @@ fun JournalEditorScreen(
                     }
                 },
                 actions = {
-                    if (!viewModel.isNewEntry) {
-                        IconButton(onClick = { showDeleteConfirm = true }) {
-                            Icon(
-                                Icons.Default.Delete,
-                                contentDescription = "Delete",
-                                tint = MaterialTheme.colorScheme.error,
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("AI sharing…") },
+                                onClick = {
+                                    menuExpanded = false
+                                    showAiSettings = true
+                                },
                             )
+                            if (!viewModel.isNewEntry) {
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text("Delete entry", color = MaterialTheme.colorScheme.error) },
+                                    onClick = {
+                                        menuExpanded = false
+                                        showDeleteConfirm = true
+                                    },
+                                )
+                            }
                         }
                     }
                     TextButton(
@@ -131,101 +201,110 @@ fun JournalEditorScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
             ) {
                 Text(
-                    "✦ Your space",
-                    style = MaterialTheme.typography.labelLarge.copy(
-                        color = ink.copy(alpha = 0.75f),
-                        letterSpacing = 1.2.sp,
+                    dateLine,
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        color = ink.copy(alpha = 0.65f),
+                        letterSpacing = 0.8.sp,
                     ),
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    if (viewModel.isNewEntry) "Write freely — this page is yours." else "Keep shaping your story.",
+                    if (viewModel.isNewEntry) "A quiet page for your thoughts." else "Continue your entry.",
                     style = MaterialTheme.typography.headlineSmall.copy(
                         color = ink,
                         fontWeight = FontWeight.Bold,
                     ),
                 )
-                Spacer(Modifier.height(20.dp))
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(22.dp),
-                    colors = CardDefaults.cardColors(containerColor = paper),
-                    elevation = CardDefaults.cardElevation(2.dp),
-                ) {
-                    Column(Modifier.padding(18.dp)) {
-                        if (!ready) {
-                            Text("Loading…", color = ink.copy(alpha = 0.6f))
-                        } else {
-                            OutlinedTextField(
-                                value = title,
-                                onValueChange = {
-                                    viewModel.setTitle(it)
-                                    validationError = false
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Title (optional)") },
-                                singleLine = true,
-                                isError = validationError,
-                                supportingText = {
-                                    if (validationError) {
-                                        Text("Add a title or write something in your entry.")
-                                    }
-                                },
-                                shape = RoundedCornerShape(14.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = diaryAccent(),
-                                    unfocusedBorderColor = ink.copy(alpha = 0.2f),
-                                    focusedLabelColor = diaryAccent(),
-                                ),
-                            )
-                            Spacer(Modifier.height(14.dp))
-                            OutlinedTextField(
-                                value = body,
-                                onValueChange = {
-                                    viewModel.setBody(it)
-                                    validationError = false
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(320.dp),
-                                label = { Text("Dear diary…") },
-                                shape = RoundedCornerShape(14.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = diaryAccent(),
-                                    unfocusedBorderColor = ink.copy(alpha = 0.2f),
-                                    focusedLabelColor = diaryAccent(),
-                                ),
-                            )
-                        }
-                    }
+                Spacer(Modifier.height(16.dp))
+                if (!ready) {
+                    Text("Loading…", color = ink.copy(alpha = 0.6f))
+                } else {
+                    OutlinedTextField(
+                        value = title,
+                        onValueChange = {
+                            viewModel.setTitle(it)
+                            validationError = false
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Title (optional)") },
+                        singleLine = true,
+                        isError = validationError,
+                        supportingText = {
+                            if (validationError) {
+                                Text("Add a title or write something in your entry.")
+                            }
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = ink.copy(alpha = 0.22f),
+                            focusedLabelColor = MaterialTheme.colorScheme.primary,
+                            focusedContainerColor = paper,
+                            unfocusedContainerColor = paper,
+                        ),
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = body,
+                        onValueChange = {
+                            viewModel.setBody(it)
+                            validationError = false
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        label = { Text("Write here…") },
+                        shape = RoundedCornerShape(20.dp),
+                        minLines = 16,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = ink.copy(alpha = 0.22f),
+                            focusedLabelColor = MaterialTheme.colorScheme.primary,
+                            focusedContainerColor = paper,
+                            unfocusedContainerColor = paper,
+                        ),
+                    )
                 }
-                Spacer(Modifier.height(24.dp))
             }
         }
     }
 }
 
 @Composable
+private fun RowSwitchRow(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    label: String,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Spacer(Modifier.width(12.dp))
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
 private fun diaryGradientBrush(): Brush {
     val scheme = MaterialTheme.colorScheme
-    val top = scheme.primaryContainer.copy(alpha = 0.55f)
-    val mid = scheme.tertiaryContainer.copy(alpha = 0.45f)
-    val bottom = scheme.secondaryContainer.copy(alpha = 0.5f)
+    val top = scheme.primaryContainer.copy(alpha = 0.5f)
+    val mid = scheme.tertiaryContainer.copy(alpha = 0.42f)
+    val bottom = scheme.secondaryContainer.copy(alpha = 0.48f)
     return Brush.verticalGradient(listOf(top, mid, bottom))
 }
 
 @Composable
 private fun diaryPaperColor(): Color {
     val scheme = MaterialTheme.colorScheme
-    return scheme.surface.copy(alpha = 0.94f)
+    return scheme.surface.copy(alpha = 0.96f)
 }
 
 @Composable
 private fun diaryInkColor(): Color = MaterialTheme.colorScheme.onSurface
-
-@Composable
-private fun diaryAccent(): Color = MaterialTheme.colorScheme.primary

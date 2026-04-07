@@ -10,4 +10,8 @@ data class JournalEntryEntity(
     val body: String,
     val createdAtEpochMillis: Long,
     val updatedAtEpochMillis: Long,
+    /** When true, this entry may appear in agent chat (if global setting + date window allow). */
+    val includeInAgentChat: Boolean = true,
+    val includeInAssistantInsight: Boolean = true,
+    val includeInWeeklyGoalsInsight: Boolean = true,
 )

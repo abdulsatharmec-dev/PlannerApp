@@ -201,6 +201,7 @@ class ChatToolExecutor @Inject constructor(
         val mustDo = args.optBoolean("must_do") == true
         val displayNumber = args.optInt("display_number")?.coerceIn(0, 999) ?: 0
         val note = args.optString("note")
+        val goalId = args.optLong("goal_id")?.takeIf { it > 0 }
         val rank = taskRepository.nextRankForDate(date)
         val end = start.plusMinutes(duration.toLong())
         val task = PriorityTask(
@@ -213,6 +214,7 @@ class ChatToolExecutor @Inject constructor(
             isTopFive = top,
             isMustDo = mustDo,
             displayNumber = displayNumber,
+            goalId = goalId,
             date = date,
         )
         val id = taskRepository.insert(task)
@@ -236,6 +238,10 @@ class ChatToolExecutor @Inject constructor(
         args.optBoolean("done")?.let { t = t.copy(isDone = it) }
         args.optBoolean("must_do")?.let { t = t.copy(isMustDo = it) }
         args.optInt("display_number")?.let { t = t.copy(displayNumber = it.coerceIn(0, 999)) }
+        if (args.has("goal_id")) {
+            val gid = args.optLong("goal_id")
+            t = t.copy(goalId = gid?.takeIf { it > 0 })
+        }
         taskRepository.update(t)
         return ok(toolCallId, "updated_task", mapOf("id" to id.toString()))
     }
@@ -265,6 +271,8 @@ class ChatToolExecutor @Inject constructor(
             deadline = args.optString("deadline"),
             category = args.optString("category") ?: "Spiritual",
             timeEstimate = args.optString("time_estimate"),
+            progressPercent = args.optInt("progress_percent")?.coerceIn(0, 100) ?: 0,
+            iconEmoji = args.optString("icon_emoji"),
             weekStart = ws,
         )
         val id = goalRepository.insert(g)
@@ -281,6 +289,8 @@ class ChatToolExecutor @Inject constructor(
         args.optString("category")?.let { g = g.copy(category = it) }
         args.optString("time_estimate")?.let { g = g.copy(timeEstimate = it.ifBlank { null }) }
         args.optBoolean("completed")?.let { g = g.copy(isCompleted = it) }
+        args.optInt("progress_percent")?.let { g = g.copy(progressPercent = it.coerceIn(0, 100)) }
+        args.optString("icon_emoji")?.let { g = g.copy(iconEmoji = it.ifBlank { null }) }
         goalRepository.update(g)
         return ok(toolCallId, "updated_goal", mapOf("id" to id.toString()))
     }

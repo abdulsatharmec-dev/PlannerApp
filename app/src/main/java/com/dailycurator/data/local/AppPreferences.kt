@@ -33,6 +33,7 @@ private const val KEY_DAY_WINDOW_END_MIN = "day_window_end_min"
 private const val KEY_JOURNAL_SHARE_WITH_CHAT = "journal_share_with_chat"
 private const val KEY_JOURNAL_IN_ASSISTANT_INSIGHT = "journal_in_assistant_insight"
 private const val KEY_JOURNAL_IN_WEEKLY_GOALS_INSIGHT = "journal_in_weekly_goals_insight"
+private const val KEY_JOURNAL_CONTEXT_WINDOW_DAYS = "journal_context_window_days"
 private const val KEY_GMAIL_ACCOUNTS_JSON = "gmail_accounts_json"
 private const val KEY_AGENT_GMAIL_READ = "agent_gmail_read_enabled"
 private const val KEY_AGENT_GMAIL_SEND = "agent_gmail_send_enabled"
@@ -192,6 +193,15 @@ class AppPreferences @Inject constructor(
         }
         prefs.registerOnSharedPreferenceChangeListener(listener)
         trySend(isJournalInWeeklyGoalsInsight())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val journalContextWindowDaysFlow: Flow<Int> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_JOURNAL_CONTEXT_WINDOW_DAYS) trySend(getJournalContextWindowDays())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getJournalContextWindowDays())
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }.distinctUntilChanged()
 
@@ -413,6 +423,17 @@ class AppPreferences @Inject constructor(
 
     fun setJournalInWeeklyGoalsInsight(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_JOURNAL_IN_WEEKLY_GOALS_INSIGHT, enabled).apply()
+    }
+
+    /**
+     * How many calendar days of journal (ending on the context reference day) may be included.
+     * **1** = that day only (default). Capped at 30.
+     */
+    fun getJournalContextWindowDays(): Int =
+        prefs.getInt(KEY_JOURNAL_CONTEXT_WINDOW_DAYS, 1).coerceIn(1, 30)
+
+    fun setJournalContextWindowDays(days: Int) {
+        prefs.edit().putInt(KEY_JOURNAL_CONTEXT_WINDOW_DAYS, days.coerceIn(1, 30)).apply()
     }
 
     fun getGmailLinkedAccounts(): List<GmailLinkedAccountPref> {

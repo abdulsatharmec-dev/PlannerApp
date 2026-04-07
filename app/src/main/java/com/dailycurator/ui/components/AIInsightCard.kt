@@ -1,6 +1,7 @@
 package com.dailycurator.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.heightIn
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,11 +43,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dailycurator.data.model.AiInsight
+import com.dailycurator.data.model.InsightSummarySegment
+import com.dailycurator.data.model.SpiritualNote
 import com.dailycurator.ui.theme.AccentGreen
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
@@ -156,7 +161,16 @@ fun AIInsightCard(
                         )
                         Spacer(Modifier.height(6.dp))
                     }
-                    InsightMarkdownBody(markdown = insight.insightText)
+                    val segs = insight.summarySegments
+                    if (!segs.isNullOrEmpty()) {
+                        InsightColoredSegments(segments = segs)
+                    } else {
+                        InsightMarkdownBody(markdown = insight.insightText)
+                    }
+                    insight.spiritualNote?.let { note ->
+                        Spacer(Modifier.height(12.dp))
+                        SpiritualReflectionCard(note = note)
+                    }
                     if (insight.recoveryPlan != null) {
                         Spacer(Modifier.height(8.dp))
                         InsightMarkdownBody(
@@ -301,6 +315,91 @@ fun WeeklyGoalsInsightCard(
 @Composable
 private fun rememberInsightTimeFormatter() = remember {
     DateTimeFormatter.ofPattern("MMM d, h:mm a")
+}
+
+@Composable
+private fun InsightColoredSegments(segments: List<InsightSummarySegment>) {
+    val scheme = MaterialTheme.colorScheme
+    val base = MaterialTheme.typography.bodyMedium
+    Text(
+        text = buildAnnotatedString {
+            segments.forEach { seg ->
+                val c = segmentToneColor(seg.tone, scheme)
+                val fw = when (seg.tone.lowercase()) {
+                    "emphasis", "warning", "warn", "time" -> FontWeight.SemiBold
+                    else -> FontWeight.Normal
+                }
+                withStyle(SpanStyle(color = c, fontWeight = fw)) {
+                    append(seg.text.trim())
+                    append(" ")
+                }
+            }
+        },
+        style = base,
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+private fun segmentToneColor(tone: String, scheme: ColorScheme): Color {
+    return when (tone.lowercase()) {
+        "emphasis", "stress" -> scheme.primary
+        "warning", "warn" -> Color(0xFFD84315)
+        "positive", "success" -> Color(0xFF2E7D32)
+        "time" -> scheme.tertiary
+        "muted" -> scheme.onSurfaceVariant.copy(alpha = 0.88f)
+        else -> scheme.onSurface
+    }
+}
+
+@Composable
+private fun SpiritualReflectionCard(note: SpiritualNote) {
+    val scheme = MaterialTheme.colorScheme
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = scheme.primaryContainer.copy(alpha = 0.42f),
+        ),
+        border = BorderStroke(1.dp, scheme.tertiary.copy(alpha = 0.55f)),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                "Qur'an · Hadith",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    color = scheme.tertiary,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.6.sp,
+                ),
+            )
+            if (note.source.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    note.source,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+            if (note.arabic.isNotBlank()) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = note.arabic,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Medium,
+                        lineHeight = 28.sp,
+                    ),
+                    color = scheme.onSurface,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = note.english,
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurface,
+            )
+        }
+    }
 }
 
 @Composable

@@ -25,7 +25,8 @@ private fun TaskEntity.toPriorityTask() = PriorityTask(
     endTime = endTime.toLocalTime(),
     dueInfo = dueInfo, statusNote = statusNote,
     urgency = Urgency.valueOf(urgency),
-    isDone = isDone, isTopFive = isTopFive, isMustDo = isMustDo, displayNumber = displayNumber, date = date.toLocalDate(),
+    isDone = isDone, isTopFive = isTopFive, isMustDo = isMustDo, displayNumber = displayNumber,
+    goalId = goalId, date = date.toLocalDate(),
 )
 
 @Singleton
@@ -42,6 +43,9 @@ class TaskRepository @Inject constructor(private val dao: TaskDao) {
 
     suspend fun getById(id: Long): PriorityTask? = dao.getById(id)?.toPriorityTask()
 
+    fun getTasksForGoal(goalId: Long): Flow<List<PriorityTask>> =
+        dao.getTasksForGoal(goalId).map { list -> list.map { it.toPriorityTask() } }
+
     suspend fun nextRankForDate(date: LocalDate): Int {
         val tasks = getTasksForDate(date).first()
         return (tasks.maxOfOrNull { it.rank } ?: 0) + 1
@@ -55,7 +59,7 @@ class TaskRepository @Inject constructor(private val dao: TaskDao) {
             endTime = task.endTime.format(TIME_FMT),
             dueInfo = task.dueInfo, statusNote = task.statusNote,
             urgency = task.urgency.name, isDone = task.isDone, isTopFive = task.isTopFive, isMustDo = task.isMustDo,
-            displayNumber = task.displayNumber,
+            displayNumber = task.displayNumber, goalId = task.goalId,
             date = task.date.format(DATE_FMT))
     )
 
@@ -65,7 +69,7 @@ class TaskRepository @Inject constructor(private val dao: TaskDao) {
             endTime = task.endTime.format(TIME_FMT),
             dueInfo = task.dueInfo, statusNote = task.statusNote,
             urgency = task.urgency.name, isDone = task.isDone, isTopFive = task.isTopFive, isMustDo = task.isMustDo,
-            displayNumber = task.displayNumber,
+            displayNumber = task.displayNumber, goalId = task.goalId,
             date = task.date.format(DATE_FMT))
     )
 
@@ -75,7 +79,7 @@ class TaskRepository @Inject constructor(private val dao: TaskDao) {
             endTime = task.endTime.format(TIME_FMT),
             dueInfo = task.dueInfo, statusNote = task.statusNote,
             urgency = task.urgency.name, isDone = task.isDone, isTopFive = task.isTopFive, isMustDo = task.isMustDo,
-            displayNumber = task.displayNumber,
+            displayNumber = task.displayNumber, goalId = task.goalId,
             date = task.date.format(DATE_FMT))
     )
 
@@ -83,4 +87,6 @@ class TaskRepository @Inject constructor(private val dao: TaskDao) {
         dao.getUndoneTasks().map { it.toPriorityTask() }
 
     suspend fun setDoneById(id: Long, done: Boolean) = dao.setDone(id, done)
+
+    suspend fun clearGoalLinks(goalId: Long) = dao.clearGoalLinks(goalId)
 }

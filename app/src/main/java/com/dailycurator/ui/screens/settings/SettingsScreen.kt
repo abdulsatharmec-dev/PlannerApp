@@ -96,6 +96,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val journalShareWithChat by viewModel.journalShareWithChat.collectAsState()
     val journalInAssistantInsight by viewModel.journalInAssistantInsight.collectAsState()
     val journalInWeeklyGoalsInsight by viewModel.journalInWeeklyGoalsInsight.collectAsState()
+    val journalContextWindowDays by viewModel.journalContextWindowDays.collectAsState()
     val assistantInsightPrompt by viewModel.assistantInsightPrompt.collectAsState()
     val weeklyGoalsInsightPrompt by viewModel.weeklyGoalsInsightPrompt.collectAsState()
     val cerebrasKey by viewModel.cerebrasKey.collectAsState()
@@ -441,10 +442,35 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 
         item {
             SettingsSection(title = "Journal & AI") {
+                Text(
+                    "Entries use the calendar day of their last update. Default is today only; widen the window below if you want more history. Each journal has toggles in the editor.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+                Row(
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    listOf(1, 3, 7, 14, 30).forEach { d ->
+                        FilterChip(
+                            selected = journalContextWindowDays == d,
+                            onClick = { viewModel.setJournalContextWindowDays(d) },
+                            label = {
+                                Text(
+                                    if (d == 1) "Today" else "${d}d",
+                                )
+                            },
+                        )
+                    }
+                }
+                HorizontalDivider(Modifier.padding(start = 16.dp))
                 SettingsToggleRow(
                     icon = Icons.Default.Book,
                     label = "Share journal with chat agent",
-                    subtitle = "AI Agent can read recent entries in its context",
+                    subtitle = "When on, eligible entries (window + per-entry) go to chat context",
                     checked = journalShareWithChat,
                     onCheckedChange = { viewModel.setJournalShareWithChat(it) },
                 )
@@ -452,7 +478,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 SettingsToggleRow(
                     icon = null,
                     label = "Journal in assistant insight",
-                    subtitle = "Home “Assistant insight” may use recent entries",
+                    subtitle = "Home assistant insight uses the same date window and per-entry flags",
                     checked = journalInAssistantInsight,
                     onCheckedChange = { viewModel.setJournalInAssistantInsight(it) },
                 )
@@ -460,7 +486,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 SettingsToggleRow(
                     icon = null,
                     label = "Journal in weekly goals insight",
-                    subtitle = "Weekly goals coaching may use recent entries",
+                    subtitle = "Weekly coaching uses the same date window and per-entry flags",
                     checked = journalInWeeklyGoalsInsight,
                     onCheckedChange = { viewModel.setJournalInWeeklyGoalsInsight(it) },
                 )

@@ -3,9 +3,12 @@ package com.dailycurator.ui.screens.tasks
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dailycurator.data.model.PriorityTask
+import com.dailycurator.data.model.TaskRepeatOption
 import com.dailycurator.data.model.Urgency
+import com.dailycurator.data.model.WeeklyGoal
 import com.dailycurator.data.pomodoro.PomodoroLaunchRequest
 import com.dailycurator.data.pomodoro.PomodoroNavBridge
+import com.dailycurator.data.repository.GoalRepository
 import com.dailycurator.data.repository.TaskRepository
 import com.dailycurator.reminders.TaskReminderScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -39,6 +42,7 @@ data class TasksUiState(
     val tasks: List<PriorityTask> = emptyList(),
     val tasksByDay: Map<LocalDate, List<PriorityTask>> = emptyMap(),
     val prioritySections: List<Pair<String, List<PriorityTask>>> = emptyList(),
+    val activeGoals: List<WeeklyGoal> = emptyList(),
 )
 
 private fun LocalDate.startOfWeek(locale: Locale = Locale.getDefault()): LocalDate {
@@ -52,6 +56,20 @@ private fun LocalDate.startOfWeek(locale: Locale = Locale.getDefault()): LocalDa
 
 private fun compareTasks(): Comparator<PriorityTask> =
     compareBy<PriorityTask> { it.rank }.thenBy { it.startTime }
+
+private fun repeatExpansionDates(
+    anchor: LocalDate,
+    repeat: TaskRepeatOption,
+    customIntervalDays: Int,
+): List<LocalDate> = when (repeat) {
+    TaskRepeatOption.NONE -> listOf(anchor)
+    TaskRepeatOption.DAILY -> (0..13).map { anchor.plusDays(it.toLong()) }
+    TaskRepeatOption.WEEKLY -> (0..3).map { anchor.plusWeeks(it.toLong()) }
+    TaskRepeatOption.CUSTOM -> {
+        val step = customIntervalDays.coerceIn(2, 30)
+        (0..7).map { anchor.plusDays(it * step.toLong()) }
+    }
+}
 
 private fun buildPrioritySections(tasks: List<PriorityTask>): List<Pair<String, List<PriorityTask>>> {
     val sorted = tasks.sortedWith(compareTasks())
@@ -70,12 +88,18 @@ private fun buildPrioritySections(tasks: List<PriorityTask>): List<Pair<String, 
 @HiltViewModel
 class TasksViewModel @Inject constructor(
     private val repo: TaskRepository,
+    private val goalRepo: GoalRepository,
     private val pomodoroNavBridge: PomodoroNavBridge,
     private val taskReminderScheduler: TaskReminderScheduler,
 ) : ViewModel() {
 
     private val listDate = MutableStateFlow(LocalDate.now())
     private val displayMode = MutableStateFlow(TasksDisplayMode.WEEK_CALENDAR)
+    private val activeGoals = goalRepo.getActiveGoals().stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        emptyList(),
+    )
 
     val uiState: StateFlow<TasksUiState> = combine(
         listDate,
@@ -88,7 +112,8 @@ class TasksViewModel @Inject constructor(
                 tasks.groupBy { it.date }.mapValues { (_, v) -> v.sortedWith(compareTasks()) }
             }
         },
-    ) { date, mode, tasksForDay, byDay ->
+        activeGoals,
+    ) { date, mode, tasksForDay, byDay, goals ->
         val weekStart = date.startOfWeek()
         val weekDays = (0L..6L).map { weekStart.plusDays(it) }
         val sortedDay = tasksForDay.sortedWith(compareTasks())
@@ -99,6 +124,7 @@ class TasksViewModel @Inject constructor(
             tasks = sortedDay,
             tasksByDay = byDay,
             prioritySections = buildPrioritySections(sortedDay),
+            activeGoals = goals,
         )
     }.stateIn(
         viewModelScope,
@@ -128,24 +154,31 @@ class TasksViewModel @Inject constructor(
         isMustDo: Boolean,
         displayNumber: Int,
         note: String?,
+        goalId: Long?,
+        repeat: TaskRepeatOption,
+        customRepeatIntervalDays: Int,
     ) = viewModelScope.launch {
-        val dayTasks = repo.getTasksForDate(date).first()
-        val nextRank = (dayTasks.maxOfOrNull { it.rank } ?: 0) + 1
-        val newId = repo.insert(
-            PriorityTask(
-                rank = nextRank,
-                title = title,
-                startTime = startTime,
-                endTime = endTime,
-                statusNote = note,
-                urgency = urgency,
-                isTopFive = isTop5,
-                isMustDo = isMustDo,
-                displayNumber = displayNumber.coerceIn(0, 999),
-                date = date,
-            ),
-        )
-        repo.getById(newId)?.let { taskReminderScheduler.schedule(it) }
+        val dates = repeatExpansionDates(date, repeat, customRepeatIntervalDays)
+        for (d in dates) {
+            val dayTasks = repo.getTasksForDate(d).first()
+            val nextRank = (dayTasks.maxOfOrNull { it.rank } ?: 0) + 1
+            val newId = repo.insert(
+                PriorityTask(
+                    rank = nextRank,
+                    title = title,
+                    startTime = startTime,
+                    endTime = endTime,
+                    statusNote = note,
+                    urgency = urgency,
+                    isTopFive = isTop5,
+                    isMustDo = isMustDo,
+                    displayNumber = displayNumber.coerceIn(0, 999),
+                    goalId = goalId,
+                    date = d,
+                ),
+            )
+            repo.getById(newId)?.let { taskReminderScheduler.schedule(it) }
+        }
     }
 
     fun updateTask(
@@ -159,6 +192,7 @@ class TasksViewModel @Inject constructor(
         isMustDo: Boolean,
         displayNumber: Int,
         note: String?,
+        goalId: Long?,
     ) = viewModelScope.launch {
         val updated = task.copy(
             title = title,
@@ -170,6 +204,7 @@ class TasksViewModel @Inject constructor(
             isMustDo = isMustDo,
             displayNumber = displayNumber.coerceIn(0, 999),
             statusNote = note,
+            goalId = goalId,
         )
         repo.update(updated)
         taskReminderScheduler.cancel(task.id)

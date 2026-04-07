@@ -11,4 +11,8 @@ data class CachedInsightEntity(
     val insightText: String,
     val boldPart: String,
     val recoveryPlan: String?,
+    val spiritualSource: String? = null,
+    val spiritualArabic: String? = null,
+    val spiritualEnglish: String? = null,
+    val summarySegmentsJson: String? = null,
 )

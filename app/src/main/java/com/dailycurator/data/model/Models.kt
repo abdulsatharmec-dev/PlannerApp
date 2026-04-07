@@ -26,6 +26,8 @@ data class PriorityTask(
      * Optional label index shown on the left of the task card. **0** = auto (1, 2, 3… by day order: rank, then start time, then id).
      */
     val displayNumber: Int = 0,
+    /** Optional link to a weekly goal (display-only from Goals). */
+    val goalId: Long? = null,
     val date: LocalDate = LocalDate.now()
 )
 
@@ -47,6 +49,9 @@ data class JournalEntry(
     val body: String,
     val createdAtEpochMillis: Long,
     val updatedAtEpochMillis: Long,
+    val includeInAgentChat: Boolean = true,
+    val includeInAssistantInsight: Boolean = true,
+    val includeInWeeklyGoalsInsight: Boolean = true,
 )
 
 data class WeeklyGoal(
@@ -57,6 +62,10 @@ data class WeeklyGoal(
     val timeEstimate: String? = null,
     val category: String = "Spiritual",
     val isCompleted: Boolean = false,
+    /** Manual progress 0–100; UI bar uses this until completed (then treated as 100%). */
+    val progressPercent: Int = 0,
+    /** Optional emoji shown on the goal card. */
+    val iconEmoji: String? = null,
     val weekStart: LocalDate = LocalDate.now()
 )
 
@@ -84,6 +93,18 @@ data class Habit(
     val completionPercent: Int get() = (progress * 100f).toInt().coerceIn(0, 100)
 }
 
+data class InsightSummarySegment(
+    val text: String,
+    /** Model hint: default, emphasis, warning, positive, time, muted */
+    val tone: String = "default",
+)
+
+data class SpiritualNote(
+    val source: String,
+    val arabic: String,
+    val english: String,
+)
+
 data class AiInsight(
     val insightText: String,
     val boldPart: String = "",
@@ -92,4 +113,7 @@ data class AiInsight(
     val generatedAtEpochMillis: Long? = null,
     /** Calendar day key (ISO date) this insight was generated for. */
     val insightDayKey: String? = null,
+    /** Colored inline segments from the model; when null, [insightText] is shown as markdown. */
+    val summarySegments: List<InsightSummarySegment>? = null,
+    val spiritualNote: SpiritualNote? = null,
 )

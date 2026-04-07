@@ -7,8 +7,25 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -18,7 +35,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.dailycurator.ui.components.DurationPresetSelector
-import com.dailycurator.ui.components.GoalListItem
+import com.dailycurator.data.model.WeeklyGoal
+import com.dailycurator.ui.components.GoalDetailBottomSheet
+import com.dailycurator.ui.components.GoalTileCard
 import com.dailycurator.ui.components.OutlinedPickerButton
 import com.dailycurator.ui.components.PickDateDialog
 import com.dailycurator.ui.components.formatDurationMinutes
@@ -32,16 +51,81 @@ fun GoalsScreen(
     viewModel: GoalsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val openDetailId by viewModel.openDetailGoalId.collectAsState()
+    val linkedTasks by viewModel.goalDetailLinkedTasks.collectAsState()
     val progress = if (state.total > 0) state.completedCount.toFloat() / state.total else 0f
-    var showAddGoal by remember { mutableStateOf(false) }
+    var showGoalForm by remember { mutableStateOf(false) }
+    var goalFormInitial by remember { mutableStateOf<WeeklyGoal?>(null) }
+    var pendingDelete by remember { mutableStateOf<WeeklyGoal?>(null) }
 
-    if (showAddGoal) {
-        AddGoalDialog(
-            onDismiss = { showAddGoal = false },
-            onConfirm = { title, description, deadline, time, category ->
-                viewModel.addGoal(title, description, deadline, time, category)
-                showAddGoal = false
-            }
+    val detailGoal = remember(openDetailId, state.pendingGoals, state.completedGoals) {
+        openDetailId?.let { id -> (state.pendingGoals + state.completedGoals).find { it.id == id } }
+    }
+
+    if (showGoalForm) {
+        GoalFormDialog(
+            initial = goalFormInitial,
+            onDismiss = {
+                showGoalForm = false
+                goalFormInitial = null
+            },
+            onSave = { title, description, deadline, time, category, iconEmoji ->
+                val existing = goalFormInitial
+                if (existing == null) {
+                    viewModel.addGoal(title, description, deadline, time, category, iconEmoji, 0)
+                } else {
+                    viewModel.updateGoal(
+                        existing.copy(
+                            title = title,
+                            description = description,
+                            deadline = deadline,
+                            timeEstimate = time,
+                            category = category,
+                            iconEmoji = iconEmoji?.trim()?.takeIf { it.isNotEmpty() },
+                        ),
+                    )
+                }
+                showGoalForm = false
+                goalFormInitial = null
+            },
+        )
+    }
+
+    pendingDelete?.let { g ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("Delete goal?") },
+            text = { Text("Remove \"${g.title}\"? Tasks linked to this goal will have the link cleared.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteGoal(g)
+                        pendingDelete = null
+                    },
+                ) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) { Text("Cancel") }
+            },
+        )
+    }
+
+    detailGoal?.let { g ->
+        GoalDetailBottomSheet(
+            goal = g,
+            linkedTasks = linkedTasks,
+            onDismiss = { viewModel.dismissGoalDetail() },
+            onEdit = {
+                viewModel.dismissGoalDetail()
+                goalFormInitial = g
+                showGoalForm = true
+            },
+            onRequestDelete = {
+                viewModel.dismissGoalDetail()
+                pendingDelete = g
+            },
+            onProgressChange = { pct -> viewModel.setGoalProgress(g.id, pct) },
+            onToggleComplete = { viewModel.toggleGoal(g) },
         )
     }
 
@@ -68,7 +152,10 @@ fun GoalsScreen(
                             color = MaterialTheme.colorScheme.onBackground))
                 }
                 Button(
-                    onClick = { showAddGoal = true },
+                    onClick = {
+                        goalFormInitial = null
+                        showGoalForm = true
+                    },
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -162,9 +249,15 @@ fun GoalsScreen(
                 modifier = Modifier.padding(horizontal = 20.dp))
         }
         items(state.completedGoals, key = { it.id }) { goal ->
-            GoalListItem(
+            GoalTileCard(
                 goal = goal,
-                onToggle = { viewModel.toggleGoal(goal) },
+                onOpenDetail = { viewModel.openGoalDetail(goal.id) },
+                onToggleComplete = { viewModel.toggleGoal(goal) },
+                onEdit = {
+                    goalFormInitial = goal
+                    showGoalForm = true
+                },
+                onRequestDelete = { pendingDelete = goal },
                 onStartPomodoro = if (goal.id > 0L) {
                     {
                         viewModel.startPomodoroForGoal(goal)
@@ -186,9 +279,15 @@ fun GoalsScreen(
                 modifier = Modifier.padding(horizontal = 20.dp))
         }
         items(state.pendingGoals, key = { it.id }) { goal ->
-            GoalListItem(
+            GoalTileCard(
                 goal = goal,
-                onToggle = { viewModel.toggleGoal(goal) },
+                onOpenDetail = { viewModel.openGoalDetail(goal.id) },
+                onToggleComplete = { viewModel.toggleGoal(goal) },
+                onEdit = {
+                    goalFormInitial = goal
+                    showGoalForm = true
+                },
+                onRequestDelete = { pendingDelete = goal },
                 onStartPomodoro = if (goal.id > 0L) {
                     {
                         viewModel.startPomodoroForGoal(goal)
@@ -204,14 +303,29 @@ fun GoalsScreen(
 }
 
 @Composable
-private fun AddGoalDialog(onDismiss: () -> Unit, onConfirm: (String, String?, String?, String?, String) -> Unit) {
-    var title by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var deadlineDate by remember { mutableStateOf<LocalDate?>(null) }
+fun GoalFormDialog(
+    initial: WeeklyGoal?,
+    onDismiss: () -> Unit,
+    onSave: (String, String?, String?, String?, String, String?) -> Unit,
+) {
+    var title by remember(initial?.id) { mutableStateOf(initial?.title ?: "") }
+    var description by remember(initial?.id) { mutableStateOf(initial?.description ?: "") }
+    var iconEmoji by remember(initial?.id) { mutableStateOf(initial?.iconEmoji ?: "") }
+    var deadlineDate by remember(initial?.id) {
+        mutableStateOf(initial?.deadline?.let { runCatching { LocalDate.parse(it) }.getOrNull() })
+    }
     var showDeadlinePicker by remember { mutableStateOf(false) }
-    var includeTimeEstimate by remember { mutableStateOf(false) }
-    var estimateMinutes by remember { mutableStateOf(60) }
-    var category by remember { mutableStateOf("Spiritual") }
+    var includeTimeEstimate by remember(initial?.id) {
+        mutableStateOf(!initial?.timeEstimate.isNullOrBlank())
+    }
+    var estimateMinutes by remember(initial?.id) {
+        mutableStateOf(
+            initial?.timeEstimate?.let { est ->
+                est.filter { it.isDigit() }.toIntOrNull()?.takeIf { it > 0 } ?: 60
+            } ?: 60,
+        )
+    }
+    var category by remember(initial?.id) { mutableStateOf(initial?.category ?: "Spiritual") }
     var isError by remember { mutableStateOf(false) }
     val dateFmt = remember { DateTimeFormatter.ofPattern("EEE, MMM d") }
 
@@ -228,20 +342,30 @@ private fun AddGoalDialog(onDismiss: () -> Unit, onConfirm: (String, String?, St
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
         title = {
-            Text("New Goal",
+            Text(
+                if (initial == null) "New Goal" else "Edit Goal",
                 style = MaterialTheme.typography.titleLarge.copy(
-                    color = MaterialTheme.colorScheme.onSurface))
+                    color = MaterialTheme.colorScheme.onSurface,
+                ),
+            )
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = title, onValueChange = { title = it; isError = false },
                     label = { Text("Goal title") }, isError = isError,
-                    singleLine = true, modifier = Modifier.fillMaxWidth()
+                    singleLine = true, modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = description, onValueChange = { description = it },
-                    label = { Text("Description (Optional)") }, modifier = Modifier.fillMaxWidth()
+                    label = { Text("Short description (optional)") }, modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = iconEmoji,
+                    onValueChange = { if (it.length <= 4) iconEmoji = it },
+                    label = { Text("Icon (emoji, optional)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedPickerButton(
                     text = deadlineDate?.format(dateFmt) ?: "Pick deadline (optional)",
@@ -288,15 +412,19 @@ private fun AddGoalDialog(onDismiss: () -> Unit, onConfirm: (String, String?, St
         },
         confirmButton = {
             Button(onClick = {
-                if (title.isBlank()) { isError = true; return@Button }
-                onConfirm(
+                if (title.isBlank()) {
+                    isError = true
+                    return@Button
+                }
+                onSave(
                     title.trim(),
                     description.takeIf { it.isNotBlank() },
                     deadlineDate?.toString(),
                     formatDurationMinutes(estimateMinutes).takeIf { includeTimeEstimate },
-                    category
+                    category,
+                    iconEmoji.trim().takeIf { it.isNotEmpty() },
                 )
-            }) { Text("Add") }
+            }) { Text(if (initial == null) "Add" else "Save") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }

@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,7 +27,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.dailycurator.data.model.AiInsight
 import com.dailycurator.data.model.PriorityTask
 import com.dailycurator.data.model.Urgency
+import com.dailycurator.data.model.WeeklyGoal
+import com.dailycurator.ui.components.GoalDetailBottomSheet
+import com.dailycurator.ui.components.GoalTileCard
+import com.dailycurator.ui.components.PickDateDialog
 import com.dailycurator.ui.components.*
+import com.dailycurator.ui.screens.goals.GoalFormDialog
 import com.dailycurator.ui.theme.*
 import java.time.LocalDate
 import java.time.LocalTime
@@ -41,7 +47,95 @@ fun TodayScreen(
     viewModel: TodayViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
-    val todayLabel = LocalDate.now().format(DateTimeFormatter.ofPattern("MMM d"))
+    val openDetailId by viewModel.openDetailGoalId.collectAsState()
+    val linkedTasks by viewModel.goalDetailLinkedTasks.collectAsState()
+    var showGoalForm by remember { mutableStateOf(false) }
+    var goalFormInitial by remember { mutableStateOf<WeeklyGoal?>(null) }
+    var pendingDelete by remember { mutableStateOf<WeeklyGoal?>(null) }
+
+    val detailGoal = remember(openDetailId, state.goals) {
+        openDetailId?.let { id -> state.goals.find { it.id == id } }
+    }
+
+    if (showGoalForm) {
+        GoalFormDialog(
+            initial = goalFormInitial,
+            onDismiss = {
+                showGoalForm = false
+                goalFormInitial = null
+            },
+            onSave = { title, description, deadline, time, category, iconEmoji ->
+                val existing = goalFormInitial
+                if (existing == null) {
+                    viewModel.addGoalFull(title, description, deadline, time, category, iconEmoji, 0)
+                } else {
+                    viewModel.updateWeeklyGoal(
+                        existing.copy(
+                            title = title,
+                            description = description,
+                            deadline = deadline,
+                            timeEstimate = time,
+                            category = category,
+                            iconEmoji = iconEmoji?.trim()?.takeIf { it.isNotEmpty() },
+                        ),
+                    )
+                }
+                showGoalForm = false
+                goalFormInitial = null
+            },
+        )
+    }
+
+    pendingDelete?.let { g ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("Delete goal?") },
+            text = { Text("Remove \"${g.title}\"?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteWeeklyGoal(g)
+                        pendingDelete = null
+                    },
+                ) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } },
+        )
+    }
+
+    detailGoal?.let { g ->
+        GoalDetailBottomSheet(
+            goal = g,
+            linkedTasks = linkedTasks,
+            onDismiss = { viewModel.dismissGoalDetail() },
+            onEdit = {
+                viewModel.dismissGoalDetail()
+                goalFormInitial = g
+                showGoalForm = true
+            },
+            onRequestDelete = {
+                viewModel.dismissGoalDetail()
+                pendingDelete = g
+            },
+            onProgressChange = { pct -> viewModel.setWeeklyGoalProgress(g.id, pct) },
+            onToggleComplete = { viewModel.toggleGoal(g) },
+        )
+    }
+
+    var showScheduleDatePicker by remember { mutableStateOf(false) }
+    val scheduleDateHeaderFmt = remember { DateTimeFormatter.ofPattern("EEE, MMM d") }
+    val scheduleDateLabel = state.scheduleTimelineDate.format(scheduleDateHeaderFmt)
+    val scheduleShowsToday = state.scheduleTimelineDate == LocalDate.now()
+
+    PickDateDialog(
+        visible = showScheduleDatePicker,
+        initialDate = state.scheduleTimelineDate,
+        onDismiss = { showScheduleDatePicker = false },
+        onConfirm = {
+            viewModel.setScheduleTimelineDate(it)
+            showScheduleDatePicker = false
+        },
+    )
     var assistantExpanded by remember { mutableStateOf(true) }
     var weeklyInsightExpanded by remember { mutableStateOf(true) }
     var top5Expanded by remember { mutableStateOf(true) }
@@ -220,6 +314,16 @@ fun TodayScreen(
                 onToggleCollapse = viewModel::toggleGoalsCollapsed,
                 onToggleGoal = viewModel::toggleGoal,
                 onAddGoal = viewModel::addGoal,
+                onOpenGoalDetail = viewModel::openGoalDetail,
+                onEditGoal = {
+                    goalFormInitial = it
+                    showGoalForm = true
+                },
+                onRequestDeleteGoal = { pendingDelete = it },
+                onStartPomodoroForGoal = {
+                    viewModel.startPomodoroForGoal(it)
+                    onNavigateToPomodoro()
+                },
                 weeklyInsightEnabled = state.weeklyGoalsInsightEnabled,
                 cerebrasConfigured = state.cerebrasConfigured,
                 weeklyInsight = state.weeklyGoalsInsight,
@@ -237,7 +341,10 @@ fun TodayScreen(
                 events = state.scheduleEvents,
                 activeTab = state.scheduleTab,
                 onTabChange = viewModel::setScheduleTab,
-                dateLabel = todayLabel,
+                scheduleDate = state.scheduleTimelineDate,
+                scheduleDateLabel = scheduleDateLabel,
+                onScheduleDateClick = { showScheduleDatePicker = true },
+                showNowIndicator = scheduleShowsToday,
                 windowStart = state.dayWindowStart,
                 windowEnd = state.dayWindowEnd,
             )
@@ -285,11 +392,15 @@ fun TodayScreen(
 
 @Composable
 private fun WeeklyGoalsSection(
-    goals: List<com.dailycurator.data.model.WeeklyGoal>,
+    goals: List<WeeklyGoal>,
     collapsed: Boolean,
     onToggleCollapse: () -> Unit,
-    onToggleGoal: (com.dailycurator.data.model.WeeklyGoal) -> Unit,
+    onToggleGoal: (WeeklyGoal) -> Unit,
     onAddGoal: (String) -> Unit,
+    onOpenGoalDetail: (Long) -> Unit,
+    onEditGoal: (WeeklyGoal) -> Unit,
+    onRequestDeleteGoal: (WeeklyGoal) -> Unit,
+    onStartPomodoroForGoal: (WeeklyGoal) -> Unit,
     weeklyInsightEnabled: Boolean,
     cerebrasConfigured: Boolean,
     weeklyInsight: AiInsight,
@@ -358,7 +469,18 @@ private fun WeeklyGoalsSection(
             Column {
                 Spacer(Modifier.height(4.dp))
                 goals.forEach { goal ->
-                    GoalListItem(goal = goal, onToggle = { onToggleGoal(goal) })
+                    GoalTileCard(
+                        goal = goal,
+                        onOpenDetail = { onOpenGoalDetail(goal.id) },
+                        onToggleComplete = { onToggleGoal(goal) },
+                        onEdit = { onEditGoal(goal) },
+                        onRequestDelete = { onRequestDeleteGoal(goal) },
+                        onStartPomodoro = if (goal.id > 0L) {
+                            { onStartPomodoroForGoal(goal) }
+                        } else {
+                            null
+                        },
+                    )
                 }
             }
         }
@@ -397,27 +519,46 @@ private fun TodayScheduleSection(
     events: List<com.dailycurator.data.model.ScheduleEvent>,
     activeTab: ScheduleTab,
     onTabChange: (ScheduleTab) -> Unit,
-    dateLabel: String,
+    scheduleDate: LocalDate,
+    scheduleDateLabel: String,
+    onScheduleDateClick: () -> Unit,
+    showNowIndicator: Boolean,
     windowStart: LocalTime,
     windowEnd: LocalTime,
 ) {
     Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-        Text("TODAY",
+        Text("SCHEDULE",
             style = MaterialTheme.typography.labelSmall.copy(
                 color = AccentGreen, fontWeight = FontWeight.Bold, letterSpacing = 1.sp))
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Schedule",
+            Text(
+                "Your day",
                 style = MaterialTheme.typography.headlineMedium.copy(
-                    color = MaterialTheme.colorScheme.onBackground),
-                modifier = Modifier.weight(1f))
-            Text(dateLabel,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant))
+                    color = MaterialTheme.colorScheme.onBackground,
+                ),
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(
+                onClick = onScheduleDateClick,
+                modifier = Modifier.size(40.dp),
+            ) {
+                Icon(
+                    Icons.Default.CalendarMonth,
+                    contentDescription = "Pick timeline date: $scheduleDateLabel",
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
-        Spacer(Modifier.height(10.dp))
+        Text(
+            scheduleDateLabel,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        Spacer(Modifier.height(4.dp))
 
         // Tab chips
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -446,11 +587,15 @@ private fun TodayScheduleSection(
                     events = events,
                     windowStart = windowStart,
                     windowEnd = windowEnd,
+                    showNowIndicator = showNowIndicator,
+                    scheduleDate = scheduleDate,
                 )
                 ScheduleTab.CLOCK -> ClockView(
                     events = events,
                     windowStart = windowStart,
                     windowEnd = windowEnd,
+                    useLiveNowIndicator = showNowIndicator,
+                    scheduleDayLabel = scheduleDateLabel,
                 )
             }
         }

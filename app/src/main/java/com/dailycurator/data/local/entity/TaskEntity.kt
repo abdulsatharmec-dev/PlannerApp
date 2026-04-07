@@ -1,5 +1,6 @@
 package com.dailycurator.data.local.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -17,6 +18,7 @@ data class TaskEntity(
     val isTopFive: Boolean = false,
     val isMustDo: Boolean = false,
     val displayNumber: Int = 0,
+    @ColumnInfo(index = true) val goalId: Long? = null,
     val date: String,
     val tags: String = "[]",
     val location: String? = null,

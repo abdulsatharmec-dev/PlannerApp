@@ -31,4 +31,12 @@ interface TaskDao {
 
     @Query("SELECT * FROM tasks WHERE isDone = 0")
     suspend fun getUndoneTasks(): List<TaskEntity>
+
+    @Query(
+        "SELECT * FROM tasks WHERE goalId = :goalId ORDER BY date DESC, rank ASC, startTime ASC",
+    )
+    fun getTasksForGoal(goalId: Long): Flow<List<TaskEntity>>
+
+    @Query("UPDATE tasks SET goalId = NULL WHERE goalId = :goalId")
+    suspend fun clearGoalLinks(goalId: Long)
 }

@@ -66,6 +66,9 @@ class SettingsViewModel @Inject constructor(
     val journalInWeeklyGoalsInsight: StateFlow<Boolean> = prefs.journalInWeeklyGoalsInsightFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.isJournalInWeeklyGoalsInsight())
 
+    val journalContextWindowDays: StateFlow<Int> = prefs.journalContextWindowDaysFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.getJournalContextWindowDays())
+
     val phoneUsageInChatAgent: StateFlow<Boolean> = prefs.phoneUsageInChatAgentFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.isPhoneUsageInChatAgent())
 
@@ -183,6 +186,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setJournalInWeeklyGoalsInsight(enabled: Boolean) {
         prefs.setJournalInWeeklyGoalsInsight(enabled)
+    }
+
+    fun setJournalContextWindowDays(days: Int) {
+        prefs.setJournalContextWindowDays(days)
     }
 
     fun persistAssistantPrompt(text: String) {

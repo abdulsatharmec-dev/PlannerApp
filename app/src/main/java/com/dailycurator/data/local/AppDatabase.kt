@@ -36,7 +36,7 @@ import java.time.format.DateTimeFormatter
         CachedInsightEntity::class, JournalEntryEntity::class, HabitLogEntity::class,
         PomodoroSessionEntity::class, AgentMemoryEntity::class,
     ],
-    version = 12,
+    version = 16,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -142,6 +142,45 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE goals ADD COLUMN progressPercent INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE goals ADD COLUMN iconEmoji TEXT")
+            }
+        }
+
+        private val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tasks ADD COLUMN goalId INTEGER")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_tasks_goalId` ON `tasks` (`goalId`)",
+                )
+            }
+        }
+
+        private val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE journal_entries ADD COLUMN includeInAgentChat INTEGER NOT NULL DEFAULT 1",
+                )
+                db.execSQL(
+                    "ALTER TABLE journal_entries ADD COLUMN includeInAssistantInsight INTEGER NOT NULL DEFAULT 1",
+                )
+                db.execSQL(
+                    "ALTER TABLE journal_entries ADD COLUMN includeInWeeklyGoalsInsight INTEGER NOT NULL DEFAULT 1",
+                )
+            }
+        }
+
+        private val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE cached_insights ADD COLUMN spiritualSource TEXT")
+                db.execSQL("ALTER TABLE cached_insights ADD COLUMN spiritualArabic TEXT")
+                db.execSQL("ALTER TABLE cached_insights ADD COLUMN spiritualEnglish TEXT")
+                db.execSQL("ALTER TABLE cached_insights ADD COLUMN summarySegmentsJson TEXT")
+            }
+        }
+
         private val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE habits ADD COLUMN seriesId TEXT NOT NULL DEFAULT ''")
@@ -209,6 +248,10 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_9_10,
                         MIGRATION_10_11,
                         MIGRATION_11_12,
+                        MIGRATION_12_13,
+                        MIGRATION_13_14,
+                        MIGRATION_14_15,
+                        MIGRATION_15_16,
                     )
                     .fallbackToDestructiveMigration()
                     .addCallback(object : Callback() {

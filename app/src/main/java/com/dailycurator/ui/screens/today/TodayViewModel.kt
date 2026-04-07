@@ -14,7 +14,17 @@ import com.dailycurator.data.repository.TaskRepository
 import com.dailycurator.reminders.TaskReminderScheduler
 import com.dailycurator.data.repository.toAiInsight
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalTime
@@ -41,6 +51,8 @@ data class TodayUiState(
     val weeklyGoalsInsightLoading: Boolean = false,
     val dayWindowStart: LocalTime = LocalTime.of(4, 0),
     val dayWindowEnd: LocalTime = LocalTime.of(22, 0),
+    /** Calendar day shown on the home schedule timeline / clock. */
+    val scheduleTimelineDate: LocalDate = LocalDate.now(),
     val homeGmailSummaryEnabled: Boolean = false,
     /** Condensed markdown/text for the Home card (from cached mailbox summary). */
     val gmailHomeDigestMarkdown: String = "",
@@ -48,6 +60,7 @@ data class TodayUiState(
 
 enum class ScheduleTab { TIMELINE, CLOCK }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class TodayViewModel @Inject constructor(
     private val taskRepo: TaskRepository,
@@ -65,14 +78,36 @@ class TodayViewModel @Inject constructor(
     )
     val uiState: StateFlow<TodayUiState> = _uiState.asStateFlow()
 
+    private val _detailGoalId = MutableStateFlow<Long?>(null)
+    val openDetailGoalId: StateFlow<Long?> = _detailGoalId.asStateFlow()
+
+    val goalDetailLinkedTasks: StateFlow<List<PriorityTask>> = _detailGoalId.flatMapLatest { id ->
+        if (id == null || id <= 0L) flowOf(emptyList())
+        else taskRepo.getTasksForGoal(id)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     private val today = LocalDate.now()
     private val weekStart = today.minusDays(today.dayOfWeek.value.toLong() - 1)
 
+    private val scheduleTimelineDate = MutableStateFlow(LocalDate.now())
+
     init {
         viewModelScope.launch {
-            taskRepo.getTasksForDate(today).collect { tasks ->
-                _uiState.update { it.copy(tasks = tasks, scheduleEvents = tasks.toScheduleEvents()) }
-            }
+            combine(
+                taskRepo.getTasksForDate(LocalDate.now()),
+                scheduleTimelineDate.flatMapLatest { d ->
+                    taskRepo.getTasksForDate(d).map { d to it }
+                },
+            ) { todayTasks, sdAndTasks ->
+                val (sd, scheduleTasks) = sdAndTasks
+                _uiState.update {
+                    it.copy(
+                        tasks = todayTasks,
+                        scheduleTimelineDate = sd,
+                        scheduleEvents = scheduleTasks.toScheduleEvents(),
+                    )
+                }
+            }.collect { }
         }
         viewModelScope.launch {
             goalRepo.getGoalsForWeek(weekStart).collect { goals ->
@@ -171,7 +206,44 @@ class TodayViewModel @Inject constructor(
     }
     fun toggleGoalsCollapsed() = _uiState.update { it.copy(goalsCollapsed = !it.goalsCollapsed) }
     fun setScheduleTab(tab: ScheduleTab) = _uiState.update { it.copy(scheduleTab = tab) }
+
+    fun setScheduleTimelineDate(date: LocalDate) {
+        scheduleTimelineDate.value = date
+    }
     fun toggleGoal(goal: WeeklyGoal) = viewModelScope.launch { goalRepo.toggleCompleted(goal) }
+
+    fun openGoalDetail(goalId: Long) {
+        _detailGoalId.value = goalId
+    }
+
+    fun dismissGoalDetail() {
+        _detailGoalId.value = null
+    }
+
+    fun updateWeeklyGoal(goal: WeeklyGoal) = viewModelScope.launch {
+        goalRepo.update(goal)
+    }
+
+    fun deleteWeeklyGoal(goal: WeeklyGoal) = viewModelScope.launch {
+        taskRepo.clearGoalLinks(goal.id)
+        goalRepo.delete(goal)
+        if (_detailGoalId.value == goal.id) _detailGoalId.value = null
+    }
+
+    fun setWeeklyGoalProgress(goalId: Long, percent: Int) = viewModelScope.launch {
+        val g = goalRepo.getById(goalId) ?: return@launch
+        goalRepo.update(g.copy(progressPercent = percent.coerceIn(0, 100)))
+    }
+
+    fun startPomodoroForGoal(goal: WeeklyGoal) {
+        pomodoroNavBridge.push(
+            PomodoroLaunchRequest(
+                entityType = PomodoroLaunchRequest.TYPE_GOAL,
+                entityId = goal.id,
+                title = goal.title,
+            ),
+        )
+    }
 
     fun addTask(
         title: String,
@@ -206,6 +278,29 @@ class TodayViewModel @Inject constructor(
 
     fun addGoal(title: String) = viewModelScope.launch {
         goalRepo.insert(WeeklyGoal(title = title, weekStart = weekStart))
+    }
+
+    fun addGoalFull(
+        title: String,
+        description: String?,
+        deadline: String?,
+        timeEstimate: String?,
+        category: String,
+        iconEmoji: String?,
+        progressPercent: Int,
+    ) = viewModelScope.launch {
+        goalRepo.insert(
+            WeeklyGoal(
+                title = title,
+                description = description,
+                deadline = deadline,
+                timeEstimate = timeEstimate,
+                category = category,
+                iconEmoji = iconEmoji?.trim()?.takeIf { it.isNotEmpty() },
+                progressPercent = progressPercent.coerceIn(0, 100),
+                weekStart = weekStart,
+            ),
+        )
     }
 
     private fun dayWindowMinutesToLocalTime(minuteOfDay: Int): LocalTime {

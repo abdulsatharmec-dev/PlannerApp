@@ -12,5 +12,7 @@ data class GoalEntity(
     val timeEstimate: String? = null,
     val category: String = "Spiritual",
     val isCompleted: Boolean = false,
+    val progressPercent: Int = 0,
+    val iconEmoji: String? = null,
     val weekStart: String
 )

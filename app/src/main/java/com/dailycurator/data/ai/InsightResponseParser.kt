@@ -3,11 +3,29 @@ package com.dailycurator.data.ai
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 
+data class ParsedInsightBundle(
+    val boldHeadline: String,
+    val summary: String,
+    val recoveryOrStrategy: String?,
+    val summarySegmentsJson: String?,
+    val spiritualSource: String?,
+    val spiritualArabic: String?,
+    val spiritualEnglish: String?,
+)
+
 /**
  * Parses assistant-style JSON (bold_headline, summary, recovery_or_strategy) from model output.
  * Never returns raw JSON blobs as the summary string for UI display.
  */
 fun parseInsightJson(raw: String): Triple<String, String, String?> {
+    val b = parseInsightBundle(raw)
+    return Triple(b.boldHeadline, b.summary, b.recoveryOrStrategy)
+}
+
+/**
+ * Full parse including optional [summary_segments] and [spiritual_note] for assistant insight UI.
+ */
+fun parseInsightBundle(raw: String): ParsedInsightBundle {
     val stripped = stripMarkdownFences(raw.trim())
     val jsonSlice = extractBalancedJsonObject(stripped)
         ?: run {
@@ -22,6 +40,8 @@ fun parseInsightJson(raw: String): Triple<String, String, String?> {
         val bold = obj.optInsightString("bold_headline")
         var summary = obj.optInsightString("summary")
         val recovery = obj.optInsightNullableString("recovery_or_strategy")
+        val segmentsJson = obj.optInsightSegmentsJson("summary_segments")
+        val (spSrc, spAr, spEn) = obj.optSpiritualNote()
 
         if (summary.isEmpty()) {
             summary = extractSummaryFromLooseText(stripped)
@@ -29,21 +49,44 @@ fun parseInsightJson(raw: String): Triple<String, String, String?> {
         summary = unwrapNestedJsonSummary(summary)
 
         if (summary.isNotBlank() && !looksLikeRawInsightJson(summary)) {
-            return Triple(bold, summary, recovery)
+            return ParsedInsightBundle(bold, summary, recovery, segmentsJson, spSrc, spAr, spEn)
         }
         if (summary.isNotBlank() && looksLikeRawInsightJson(summary)) {
             val inner = runCatching { JsonParser.parseString(summary.trim()).asJsonObject.optInsightString("summary") }.getOrNull()
             if (!inner.isNullOrBlank() && !looksLikeRawInsightJson(inner)) {
-                return Triple(bold, inner, recovery)
+                return ParsedInsightBundle(bold, inner, recovery, segmentsJson, spSrc, spAr, spEn)
             }
         }
     }
 
-    return Triple(
-        "",
-        "The model reply could not be turned into a summary. Tap **Regenerate** to try again.",
-        null,
+    return ParsedInsightBundle(
+        boldHeadline = "",
+        summary = "The model reply could not be turned into a summary. Tap **Regenerate** to try again.",
+        recoveryOrStrategy = null,
+        summarySegmentsJson = null,
+        spiritualSource = null,
+        spiritualArabic = null,
+        spiritualEnglish = null,
     )
+}
+
+private fun JsonObject.optInsightSegmentsJson(key: String): String? {
+    val el = get(key) ?: return null
+    if (el.isJsonNull || !el.isJsonArray) return null
+    val arr = el.asJsonArray
+    if (arr.size() == 0) return null
+    return arr.toString()
+}
+
+private fun JsonObject.optSpiritualNote(): Triple<String?, String?, String?> {
+    val el = get("spiritual_note") ?: return Triple(null, null, null)
+    if (el.isJsonNull || !el.isJsonObject) return Triple(null, null, null)
+    val o = el.asJsonObject
+    val src = o.optInsightNullableString("source")
+    val ar = o.optInsightNullableString("arabic")
+    val en = o.optInsightNullableString("english")
+    if (en.isNullOrBlank() && ar.isNullOrBlank()) return Triple(null, null, null)
+    return Triple(src, ar, en)
 }
 
 private fun extractSummaryFromLooseText(text: String): String {
