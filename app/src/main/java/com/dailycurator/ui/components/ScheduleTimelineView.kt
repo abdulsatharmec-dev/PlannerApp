@@ -32,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
@@ -50,7 +51,9 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 private val TimelineViewportHeight = 400.dp
-private const val BaseHourDp = 72f
+/** Taller scale (~Google Calendar day view) so short blocks still fit a readable title. */
+private const val BaseHourDp = 100f
+private const val LaneStackGapDp = 3f
 private val BaseDpPerMinute: Float get() = BaseHourDp / 60f
 
 private fun minutesOfDay(t: LocalTime): Int = t.hour * 60 + t.minute
@@ -168,7 +171,12 @@ private fun assignOverlapLanes(
 ): Map<Long, LaneInfo> {
     val clipped = events.mapNotNull { e ->
         clipEventToWindow(e, windowStart, windowEnd)?.let { range -> e to range }
-    }.sortedBy { it.second.first }
+    }.sortedWith(
+        compareBy<Pair<ScheduleEvent, Pair<LocalTime, LocalTime>>> { it.second.first }
+            .thenByDescending { r ->
+                ChronoUnit.MINUTES.between(r.second.first, r.second.second)
+            },
+    )
     val laneEnds = mutableListOf<LocalTime>()
     val laneById = mutableMapOf<Long, Int>()
     for ((e, range) in clipped) {
@@ -202,6 +210,40 @@ private fun eventTemporalAlpha(event: ScheduleEvent, now: LocalTime): Float = wh
     !event.endTime.isAfter(now) -> 0.72f
     !event.startTime.isAfter(now) && now.isBefore(event.endTime) -> 1f
     else -> 0.68f
+}
+
+private data class ClippedEvent(val event: ScheduleEvent, val start: LocalTime, val end: LocalTime)
+
+private fun buildClippedSorted(
+    events: List<ScheduleEvent>,
+    windowStart: LocalTime,
+    windowEnd: LocalTime,
+): List<ClippedEvent> = events.mapNotNull { e ->
+    clipEventToWindow(e, windowStart, windowEnd)?.let { (s, ed) -> ClippedEvent(e, s, ed) }
+}.sortedWith(
+    compareBy<ClippedEvent> { it.start }
+        .thenByDescending { ChronoUnit.MINUTES.between(it.start, it.end) },
+)
+
+/** Y (dp axis) of the next block top in the same lane, or the window bottom if none. */
+private fun ceilingYBeforeNextInLane(
+    clipped: List<ClippedEvent>,
+    laneMap: Map<Long, LaneInfo>,
+    current: ScheduleEvent,
+    currentEnd: LocalTime,
+    slices: List<TimelineSlice>,
+    windowEnd: LocalTime,
+): Float {
+    val myLane = laneMap[current.id]?.lane ?: 0
+    var nextStart: LocalTime? = null
+    for (c in clipped) {
+        if (c.event.id == current.id) continue
+        if ((laneMap[c.event.id]?.lane ?: 0) != myLane) continue
+        if (c.start.isBefore(currentEnd)) continue
+        if (nextStart == null || c.start.isBefore(nextStart)) nextStart = c.start
+    }
+    val boundaryTime = nextStart ?: windowEnd
+    return yAtMinute(slices, minutesOfDayFloat(boundaryTime))
 }
 
 /**
@@ -246,11 +288,11 @@ fun ScheduleTimelineView(
         else laneMap.values.maxOf { it.maxLane + 1 }.coerceAtLeast(1)
     }
 
-    val sortedEvents = remember(events) {
-        events.sortedWith(
-            compareBy<ScheduleEvent> { it.startTime }
-                .thenByDescending { ChronoUnit.MINUTES.between(it.startTime, it.endTime) },
-        )
+    val clippedSorted = remember(events, windowStart, windowEnd) {
+        buildClippedSorted(events, windowStart, windowEnd)
+    }
+    val sortedEvents = remember(clippedSorted) {
+        clippedSorted.map { it.event }
     }
 
     val hourTicks = remember(windowStart, windowEnd) { hourTickTimes(windowStart, windowEnd) }
@@ -399,13 +441,25 @@ fun ScheduleTimelineView(
                                 val eeM = minutesOfDayFloat(ee)
                                 val topY = yAtMinute(slices, esM)
                                 val bottomY = yAtMinute(slices, eeM)
-                                val minH = when {
-                                    maxLanes >= 4 -> 74f
-                                    maxLanes >= 3 -> 66f
-                                    maxLanes >= 2 -> 58f
-                                    else -> 52f
+                                val naturalH = (bottomY - topY).coerceAtLeast(1f)
+                                val ceilingY = ceilingYBeforeNextInLane(
+                                    clippedSorted,
+                                    laneMap,
+                                    event,
+                                    ee,
+                                    slices,
+                                    windowEnd,
+                                )
+                                val maxExpand =
+                                    (ceilingY - topY - LaneStackGapDp).coerceAtLeast(naturalH)
+                                val minReadableH = when {
+                                    maxLanes >= 4 -> 42f
+                                    maxLanes >= 3 -> 44f
+                                    else -> 48f
                                 }
-                                val heightY = (bottomY - topY).coerceAtLeast(minH)
+                                val heightY = max(naturalH, minReadableH)
+                                    .coerceAtMost(maxExpand)
+                                    .coerceAtLeast(6f)
                                 val lane = laneMap[event.id] ?: LaneInfo(0, 0)
                                 val nLanes = (lane.maxLane + 1).coerceAtLeast(1)
                                 val gap = gapTrack
@@ -425,7 +479,8 @@ fun ScheduleTimelineView(
                                     modifier = Modifier
                                         .width(slotW)
                                         .offset(x = xOff, y = topY.dp)
-                                        .height(heightY.dp),
+                                        .height(heightY.dp)
+                                        .clip(RoundedCornerShape(12.dp)),
                                 )
                             }
 
