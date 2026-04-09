@@ -66,6 +66,7 @@
                 <action android:name="com.dailycurator.pomodoro.PAUSE" />
                 <action android:name="com.dailycurator.pomodoro.RESUME" />
                 <action android:name="com.dailycurator.pomodoro.STOP" />
+                <action android:name="com.dailycurator.pomodoro.TIMER_PHASE_COMPLETE" />
             </intent-filter>
         </receiver>
 

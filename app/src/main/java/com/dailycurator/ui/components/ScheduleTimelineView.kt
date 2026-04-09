@@ -54,6 +54,17 @@ private val TimelineViewportHeight = 400.dp
 /** Taller scale (~Google Calendar day view) so short blocks still fit a readable title. */
 private const val BaseHourDp = 100f
 private const val LaneStackGapDp = 3f
+
+/** Time labels column; track uses remaining width. */
+private val TimelineTimeColumnWidth = 58.dp
+/** Single-column track: nearly full width with small inset. */
+private val TrackEdgeInsetSingle = 4.dp
+/** Multi-column track: inset from scroll viewport edges. */
+private val TrackEdgeInsetMulti = 6.dp
+/** Horizontal gap between simultaneous-event columns. */
+private val TrackLaneSpacing = 6.dp
+/** When overlaps require scrolling, each lane is at least this wide. */
+private val TrackMinLaneWidth = 104.dp
 private val BaseDpPerMinute: Float get() = BaseHourDp / 60f
 
 private fun minutesOfDay(t: LocalTime): Int = t.hour * 60 + t.minute
@@ -102,12 +113,6 @@ private fun countTasksOverlappingSlice(
     es.isBefore(segEnd) && ee.isAfter(segStart)
 }
 
-private fun densityExpansion(overlapCount: Int): Float {
-    if (overlapCount <= 1) return 1f
-    val k = (overlapCount - 1).coerceAtMost(8)
-    return 1f + 0.78f * k + 0.11f * k * k
-}
-
 private data class TimelineSlice(
     val segStart: LocalTime,
     val segEnd: LocalTime,
@@ -129,7 +134,9 @@ private fun buildTimelineSlices(
         val mins = ChronoUnit.MINUTES.between(segStart, segEnd)
         if (mins > 0) {
             val n = countTasksOverlappingSlice(events, segStart, segEnd, windowStart, windowEnd)
-            val h = BaseDpPerMinute * mins * densityExpansion(n)
+            // Fixed scale per minute: hour bands never stretch when more tasks overlap that hour;
+            // overlaps use horizontal lanes + min card height instead.
+            val h = BaseDpPerMinute * mins
             out.add(TimelineSlice(segStart, segEnd, h, n))
         }
         t = t.plusHours(1)
@@ -225,6 +232,39 @@ private fun buildClippedSorted(
         .thenByDescending { ChronoUnit.MINUTES.between(it.start, it.end) },
 )
 
+/**
+ * Peak concurrent event count during [rangeStart, rangeEnd) using half-open intervals:
+ * active at t iff !start.isAfter(t) && end.isAfter(t).
+ */
+private fun maxConcurrentDuring(
+    rangeStart: LocalTime,
+    rangeEnd: LocalTime,
+    clipped: List<ClippedEvent>,
+): Int {
+    if (!rangeStart.isBefore(rangeEnd)) return 1
+    val active = clipped.filter { it.start < rangeEnd && it.end > rangeStart }
+    if (active.isEmpty()) return 1
+    val checkPoints = mutableSetOf<LocalTime>()
+    checkPoints.add(rangeStart)
+    for (c in active) {
+        if (!c.start.isBefore(rangeStart) && c.start.isBefore(rangeEnd)) checkPoints.add(c.start)
+        if (c.end.isAfter(rangeStart) && c.end.isBefore(rangeEnd)) checkPoints.add(c.end)
+    }
+    var maxC = 1
+    for (t in checkPoints.sorted()) {
+        if (!t.isBefore(rangeStart) && t.isBefore(rangeEnd)) {
+            val c = active.count { ev -> !ev.start.isAfter(t) && ev.end.isAfter(t) }
+            maxC = maxOf(maxC, c)
+        }
+    }
+    return maxC.coerceAtLeast(1)
+}
+
+/** Widest simultaneous stack any event participates in; drives min track width / horizontal scroll. */
+private fun maxTrackColumnsNeeded(clipped: List<ClippedEvent>): Int =
+    if (clipped.isEmpty()) 1
+    else clipped.maxOf { maxConcurrentDuring(it.start, it.end, clipped) }.coerceAtLeast(1)
+
 /** Y (dp axis) of the next block top in the same lane, or the window bottom if none. */
 private fun ceilingYBeforeNextInLane(
     clipped: List<ClippedEvent>,
@@ -247,7 +287,7 @@ private fun ceilingYBeforeNextInLane(
 }
 
 /**
- * Scrollable timeline with density-expanded hours, minute ticks in busy slices,
+ * Scrollable timeline with uniform hour scale, minute ticks in busy slices,
  * lane layout for overlaps, per-task accent colors, and a prominent “now” marker.
  */
 @Composable
@@ -283,13 +323,12 @@ fun ScheduleTimelineView(
     val laneMap = remember(events, windowStart, windowEnd) {
         assignOverlapLanes(events, windowStart, windowEnd)
     }
-    val maxLanes = remember(laneMap) {
-        if (laneMap.isEmpty()) 1
-        else laneMap.values.maxOf { it.maxLane + 1 }.coerceAtLeast(1)
-    }
 
     val clippedSorted = remember(events, windowStart, windowEnd) {
         buildClippedSorted(events, windowStart, windowEnd)
+    }
+    val maxTrackColumns = remember(clippedSorted) {
+        maxTrackColumnsNeeded(clippedSorted)
     }
     val sortedEvents = remember(clippedSorted) {
         clippedSorted.map { it.event }
@@ -342,7 +381,7 @@ fun ScheduleTimelineView(
             Row(Modifier.fillMaxWidth()) {
                 Box(
                     Modifier
-                        .width(58.dp)
+                        .width(TimelineTimeColumnWidth)
                         .fillMaxHeight(),
                 ) {
                     hourTicks.forEach { tick ->
@@ -382,29 +421,43 @@ fun ScheduleTimelineView(
                 }
 
                 val hTrackScroll = rememberScrollState()
+                LaunchedEffect(maxTrackColumns) {
+                    hTrackScroll.scrollTo(0)
+                }
                 BoxWithConstraints(
                     Modifier
                         .weight(1f)
                         .fillMaxHeight(),
                 ) {
                     val viewportW = maxWidth
-                    val gapTrack = 6.dp
-                    val minSlotW = 116.dp
-                    val minContentW = minSlotW * maxLanes + gapTrack * (maxLanes + 1)
-                    val contentW = maxOf(viewportW, minContentW)
+                    val nLaneCount = maxTrackColumns.coerceAtLeast(1)
+                    val trackNeedsMultiColumnMinWidth = nLaneCount > 1
+                    val contentW = if (!trackNeedsMultiColumnMinWidth) {
+                        viewportW
+                    } else {
+                        val minNeeded =
+                            TrackEdgeInsetMulti * 2 +
+                                TrackMinLaneWidth * nLaneCount +
+                                TrackLaneSpacing * (nLaneCount - 1)
+                        maxOf(viewportW, minNeeded)
+                    }
+                    val needsHScroll = contentW > viewportW
                     Box(
                         Modifier
                             .fillMaxWidth()
-                            .horizontalScroll(hTrackScroll),
+                            .then(
+                                if (needsHScroll) Modifier.horizontalScroll(hTrackScroll) else Modifier,
+                            ),
                     ) {
                         BoxWithConstraints(
                             Modifier
-                                .width(contentW)
+                                .then(
+                                    if (needsHScroll) Modifier.width(contentW) else Modifier.fillMaxWidth(),
+                                )
                                 .fillMaxHeight(),
                         ) {
                             val trackWidth = maxWidth
                             val lineColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.32f)
-                            val currentHourFill = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
 
                             Canvas(Modifier.fillMaxWidth().fillMaxHeight()) {
                                 hourTicks.forEach { tick ->
@@ -417,21 +470,6 @@ fun ScheduleTimelineView(
                                         strokeWidth = 1.dp.toPx(),
                                     )
                                 }
-                            }
-
-                            if (showNowIndicator && nowM > startM && nowM < endM) {
-                                val hourFloor = ((nowM / 60f).toInt() * 60).coerceAtLeast(startM)
-                                val hourCeil = (hourFloor + 60).coerceAtMost(endM)
-                                val top = yAtMinute(slices, hourFloor.toFloat())
-                                val bottom = yAtMinute(slices, hourCeil.toFloat())
-                                val h = (bottom - top).coerceAtLeast(8f)
-                                Box(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .offset(y = top.dp)
-                                        .height(h.dp)
-                                        .background(currentHourFill, RoundedCornerShape(8.dp)),
-                                )
                             }
 
                             sortedEvents.forEach { event ->
@@ -452,20 +490,33 @@ fun ScheduleTimelineView(
                                 )
                                 val maxExpand =
                                     (ceilingY - topY - LaneStackGapDp).coerceAtLeast(naturalH)
+                                val colsForEvent =
+                                    maxConcurrentDuring(es, ee, clippedSorted).coerceAtLeast(1)
                                 val minReadableH = when {
-                                    maxLanes >= 4 -> 42f
-                                    maxLanes >= 3 -> 44f
+                                    colsForEvent >= 4 -> 42f
+                                    colsForEvent >= 3 -> 44f
                                     else -> 48f
                                 }
                                 val heightY = max(naturalH, minReadableH)
                                     .coerceAtMost(maxExpand)
                                     .coerceAtLeast(6f)
                                 val lane = laneMap[event.id] ?: LaneInfo(0, 0)
-                                val nLanes = (lane.maxLane + 1).coerceAtLeast(1)
-                                val gap = gapTrack
-                                val usable = trackWidth - gap * (nLanes + 1)
-                                val slotW = usable / nLanes
-                                val xOff = gap + (slotW + gap) * lane.lane.toFloat()
+                                val laneIndex =
+                                    lane.lane.coerceIn(0, (colsForEvent - 1).coerceAtLeast(0))
+                                val eventIsSoloOnTimeline = colsForEvent <= 1
+                                val (slotW, xOffDp) = if (eventIsSoloOnTimeline) {
+                                    val inset = TrackEdgeInsetSingle
+                                    val w = (trackWidth - inset * 2).coerceAtLeast(1.dp)
+                                    w to inset
+                                } else {
+                                    val inset = TrackEdgeInsetMulti
+                                    val inner =
+                                        (trackWidth - inset * 2 - TrackLaneSpacing * (colsForEvent - 1))
+                                            .coerceAtLeast(1.dp)
+                                    val w = (inner / colsForEvent).coerceAtLeast(1.dp)
+                                    val x = inset + (w + TrackLaneSpacing) * laneIndex
+                                    w to x
+                                }
 
                                 TimelineEventCard(
                                     event = event,
@@ -476,9 +527,10 @@ fun ScheduleTimelineView(
                                     },
                                     accentColorOverride = scheduleTaskAccentColor(event.id),
                                     showDurationMinutes = true,
+                                    narrowTrackColumn = !eventIsSoloOnTimeline && slotW < 118.dp,
                                     modifier = Modifier
                                         .width(slotW)
-                                        .offset(x = xOff, y = topY.dp)
+                                        .offset(x = xOffDp, y = topY.dp)
                                         .height(heightY.dp)
                                         .clip(RoundedCornerShape(12.dp)),
                                 )

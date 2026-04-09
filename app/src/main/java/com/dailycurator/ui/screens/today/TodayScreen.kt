@@ -136,8 +136,8 @@ fun TodayScreen(
             showScheduleDatePicker = false
         },
     )
-    var assistantExpanded by remember { mutableStateOf(true) }
-    var weeklyInsightExpanded by remember { mutableStateOf(true) }
+    var assistantExpanded by remember { mutableStateOf(false) }
+    var weeklyInsightExpanded by remember { mutableStateOf(false) }
     var top5Expanded by remember { mutableStateOf(true) }
     var showCompletedPriorities by rememberSaveable { mutableStateOf(true) }
 

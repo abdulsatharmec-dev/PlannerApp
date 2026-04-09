@@ -1,5 +1,10 @@
 package com.dailycurator.ui.screens.tasks
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,6 +34,8 @@ import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.EventRepeat
 import androidx.compose.material.icons.filled.ViewWeek
@@ -40,12 +47,14 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
@@ -55,9 +64,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -99,6 +110,7 @@ fun TasksScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val orderedDayTasks = remember(state.tasks) { tasksSortedForListNumber(state.tasks) }
+    var viewOptionsExpanded by rememberSaveable { mutableStateOf(false) }
     var showAddDialog by remember { mutableStateOf(false) }
     var taskToEdit by remember { mutableStateOf<PriorityTask?>(null) }
     var showJumpDatePicker by remember { mutableStateOf(false) }
@@ -174,98 +186,153 @@ fun TasksScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp),
-                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        "Tasks",
-                        style = MaterialTheme.typography.displaySmall.copy(
-                            color = MaterialTheme.colorScheme.onBackground,
-                            fontWeight = FontWeight.Bold,
-                        ),
-                        modifier = Modifier.weight(1f),
-                    )
-                    TasksViewModeToggle(
-                        mode = state.displayMode,
-                        onSelect = { viewModel.setDisplayMode(it) },
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    IconButton(onClick = { showJumpDatePicker = true }) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { viewOptionsExpanded = !viewOptionsExpanded }
+                            .padding(vertical = 6.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Tasks",
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    fontWeight = FontWeight.SemiBold,
+                                ),
+                            )
+                            Text(
+                                state.listDate.format(selectedLongFmt),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                         Icon(
-                            Icons.Default.CalendarMonth,
-                            contentDescription = "Jump to date",
+                            if (viewOptionsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = if (viewOptionsExpanded) "Hide view options" else "Show view options",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                }
-            }
-
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    IconButton(onClick = { viewModel.shiftSelectedWeek(-1) }) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous week")
+                    AnimatedVisibility(
+                        visible = viewOptionsExpanded,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(top = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(
+                                    "Layout",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    TasksViewModeToggle(
+                                        mode = state.displayMode,
+                                        onSelect = { viewModel.setDisplayMode(it) },
+                                    )
+                                    IconButton(onClick = { showJumpDatePicker = true }) {
+                                        Icon(
+                                            Icons.Default.CalendarMonth,
+                                            contentDescription = "Jump to date",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                            ) {
+                                IconButton(onClick = { viewModel.shiftSelectedWeek(-1) }) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                                        contentDescription = "Previous week",
+                                    )
+                                }
+                                Text(
+                                    "${weekStart.format(weekRangeFmt)} – ${weekEnd.format(weekRangeFmt)}",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                IconButton(onClick = { viewModel.shiftSelectedWeek(1) }) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                        contentDescription = "Next week",
+                                    )
+                                }
+                            }
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 0.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                items(state.weekDays, key = { it.toString() }) { day ->
+                                    val dayTasks = state.tasksByDay[day].orEmpty()
+                                    WeekDayColumn(
+                                        day = day,
+                                        selected = day == state.listDate,
+                                        previewTasks = dayTasks,
+                                        dayLetterFmt = dayLetterFmt,
+                                        onClick = { viewModel.setListDate(day) },
+                                    )
+                                }
+                            }
+                            Text(
+                                when (state.displayMode) {
+                                    TasksDisplayMode.WEEK_CALENDAR -> "Tap a day to choose · list order: rank, then time"
+                                    TasksDisplayMode.PRIORITY_GROUPS -> "Same day, grouped by urgency"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(
+                                    "Show completed",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                Switch(
+                                    checked = state.showCompletedTasks,
+                                    onCheckedChange = { viewModel.setShowCompletedTasks(it) },
+                                )
+                            }
+                        }
                     }
-                    Text(
-                        "${weekStart.format(weekRangeFmt)} – ${weekEnd.format(weekRangeFmt)}",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    IconButton(onClick = { viewModel.shiftSelectedWeek(1) }) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next week")
-                    }
+                    Spacer(Modifier.height(8.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
-            }
-
-            item {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(state.weekDays, key = { it.toString() }) { day ->
-                        val dayTasks = state.tasksByDay[day].orEmpty()
-                        WeekDayColumn(
-                            day = day,
-                            selected = day == state.listDate,
-                            previewTasks = dayTasks,
-                            dayLetterFmt = dayLetterFmt,
-                            onClick = { viewModel.setListDate(day) },
-                        )
-                    }
-                }
-            }
-
-            item {
-                Text(
-                    state.listDate.format(selectedLongFmt),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                )
-                Text(
-                    when (state.displayMode) {
-                        TasksDisplayMode.WEEK_CALENDAR -> "Tap a day above to filter · ordered by rank and time"
-                        TasksDisplayMode.PRIORITY_GROUPS -> "Grouped by urgency for the selected day"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                )
             }
 
             when (state.displayMode) {
                 TasksDisplayMode.WEEK_CALENDAR -> {
                     if (state.tasks.isEmpty()) {
                         item {
-                            EmptyTasksHint(modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp))
+                            EmptyTasksHint(
+                                allTasksDoneHidden = state.allTasksDoneHidden,
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
+                            )
                         }
                     } else {
                         items(state.tasks, key = { it.id }) { task ->
@@ -288,7 +355,10 @@ fun TasksScreen(
                 TasksDisplayMode.PRIORITY_GROUPS -> {
                     if (state.prioritySections.isEmpty()) {
                         item {
-                            EmptyTasksHint(modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp))
+                            EmptyTasksHint(
+                                allTasksDoneHidden = state.allTasksDoneHidden,
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
+                            )
                         }
                     } else {
                         state.prioritySections.forEach { (label, tasks) ->
@@ -505,10 +575,17 @@ private fun WeekDayColumn(
 }
 
 @Composable
-private fun EmptyTasksHint(modifier: Modifier = Modifier) {
+private fun EmptyTasksHint(
+    allTasksDoneHidden: Boolean,
+    modifier: Modifier = Modifier,
+) {
     Text(
-        "No tasks for this day. Tap + to add one.",
-        style = MaterialTheme.typography.bodyLarge,
+        if (allTasksDoneHidden) {
+            "Everything here is done. Open View options (tap the header) and turn on Show completed to see checked-off tasks."
+        } else {
+            "No tasks for this day. Tap + to add one."
+        },
+        style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier,
     )

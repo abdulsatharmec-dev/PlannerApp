@@ -1,15 +1,19 @@
 package com.dailycurator.data.repository
 
 import android.content.Context
+import com.dailycurator.data.ai.AiPromptDefaults
 import com.dailycurator.data.ai.InsightType
+import com.dailycurator.data.gmail.GmailSummarySuggestedTask
 import com.dailycurator.data.gmail.GmailTokenResult
 import com.dailycurator.data.gmail.GmailTokenProvider
 import com.dailycurator.data.gmail.GmailRestClient
 import com.dailycurator.data.local.AppPreferences
 import com.dailycurator.data.local.dao.CachedInsightDao
 import com.dailycurator.data.local.entity.CachedInsightEntity
+import com.dailycurator.data.model.Urgency
 import com.dailycurator.data.remote.CerebrasChatMessage
 import com.dailycurator.data.remote.CerebrasRestClient
+import com.google.gson.JsonParser
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
@@ -112,5 +116,61 @@ class GmailMailboxSummaryRepository @Inject constructor(
         )
         prefs.setMailboxSummaryRangeDays(rangeDays)
         Result.success(Unit)
+    }
+
+    /**
+     * Uses the configured LLM to infer concrete planner tasks from an already-generated summary.
+     */
+    suspend fun suggestTasksFromSummaryMarkdown(markdown: String): Result<List<GmailSummarySuggestedTask>> {
+        if (!prefs.isLlmConfigured()) {
+            return Result.failure(IllegalStateException("Add an LLM API key in Settings."))
+        }
+        val trimmed = if (markdown.length > 14_000) {
+            markdown.take(14_000) + "\n\n…"
+        } else {
+            markdown
+        }
+        val raw = runCatching {
+            cerebras.completePlainText(
+                messages = listOf(
+                    CerebrasChatMessage(role = "system", content = AiPromptDefaults.GMAIL_SUMMARY_EXTRACT_TASKS),
+                    CerebrasChatMessage(
+                        role = "user",
+                        content = "Gmail summary (markdown):\n\n$trimmed",
+                    ),
+                ),
+                temperature = 0.2,
+                maxTokens = 1024,
+            )
+        }.getOrElse { return Result.failure(it) }
+
+        return runCatching { parseSuggestedTasksJson(raw) }
+    }
+
+    private fun parseSuggestedTasksJson(raw: String): List<GmailSummarySuggestedTask> {
+        var t = raw.trim()
+        if (t.startsWith("```")) {
+            t = t.removePrefix("```json").removePrefix("```").trim()
+            val fence = t.lastIndexOf("```")
+            if (fence >= 0) t = t.substring(0, fence).trim()
+        }
+        val root = JsonParser.parseString(t).asJsonObject
+        val arr = root.getAsJsonArray("tasks") ?: return emptyList()
+        val out = ArrayList<GmailSummarySuggestedTask>()
+        for (el in arr) {
+            if (!el.isJsonObject) continue
+            val o = el.asJsonObject
+            val title = o.get("title")?.takeUnless { it.isJsonNull }?.asString?.trim().orEmpty()
+            if (title.isEmpty()) continue
+            val detail = o.get("detail")?.takeUnless { it.isJsonNull }?.asString?.trim().orEmpty()
+            val urgStr = o.get("urgency")?.takeUnless { it.isJsonNull }?.asString?.trim()?.lowercase()
+            val urgency = when (urgStr) {
+                "high" -> Urgency.RED
+                "low" -> Urgency.NEUTRAL
+                else -> Urgency.GREEN
+            }
+            out.add(GmailSummarySuggestedTask(title = title, detail = detail, urgency = urgency))
+        }
+        return out
     }
 }

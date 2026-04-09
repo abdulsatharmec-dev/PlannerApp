@@ -3,6 +3,7 @@ package com.dailycurator.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Box
@@ -44,6 +45,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -52,8 +54,6 @@ import com.dailycurator.data.model.AiInsight
 import com.dailycurator.data.model.InsightSummarySegment
 import com.dailycurator.data.model.SpiritualNote
 import com.dailycurator.ui.theme.AccentGreen
-import com.mikepenz.markdown.m3.Markdown
-import com.mikepenz.markdown.m3.markdownColor
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -62,7 +62,7 @@ import java.time.format.DateTimeFormatter
 fun AIInsightCard(
     insight: AiInsight,
     modifier: Modifier = Modifier,
-    expanded: Boolean = true,
+    expanded: Boolean = false,
     onExpandedChange: (Boolean) -> Unit = {},
     onRegenerate: (() -> Unit)? = null,
     isRegenerating: Boolean = false,
@@ -85,22 +85,28 @@ fun AIInsightCard(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(
-                    Icons.Default.AutoAwesome,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(Modifier.size(4.dp))
-                Text(
-                    "ASSISTANT INSIGHT",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        color = MaterialTheme.colorScheme.primary,
-                        letterSpacing = 1.sp,
-                        fontWeight = FontWeight.SemiBold
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onExpandedChange(!expanded) },
+                ) {
+                    Icon(
+                        Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(14.dp)
                     )
-                )
-                Spacer(Modifier.weight(1f))
+                    Spacer(Modifier.size(4.dp))
+                    Text(
+                        "ASSISTANT INSIGHT",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = MaterialTheme.colorScheme.primary,
+                            letterSpacing = 1.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    )
+                }
                 if (showRegenerate && onRegenerate != null) {
                     IconButton(
                         onClick = onRegenerate,
@@ -142,6 +148,21 @@ fun AIInsightCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            if (!expanded) {
+                val teaser = insight.boldPart.trim().ifEmpty {
+                    insight.insightText.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
+                }
+                if (teaser.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = teaser,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
             AnimatedVisibility(visible = expanded) {
                 Column {
                     Spacer(Modifier.height(10.dp))
@@ -165,7 +186,10 @@ fun AIInsightCard(
                     if (!segs.isNullOrEmpty()) {
                         InsightColoredSegments(segments = segs)
                     } else {
-                        InsightMarkdownBody(markdown = insight.insightText)
+                        MarkdownSummaryBody(
+                            markdown = insight.insightText,
+                            style = MarkdownSummaryStyle.CompactRich,
+                        )
                     }
                     insight.spiritualNote?.let { note ->
                         Spacer(Modifier.height(12.dp))
@@ -173,9 +197,17 @@ fun AIInsightCard(
                     }
                     if (insight.recoveryPlan != null) {
                         Spacer(Modifier.height(8.dp))
-                        InsightMarkdownBody(
+                        Text(
+                            "Next moves",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.secondary,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        MarkdownSummaryBody(
                             markdown = insight.recoveryPlan,
                             baseColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MarkdownSummaryStyle.CompactRich,
                         )
                     }
                 }
@@ -226,7 +258,12 @@ fun WeeklyGoalsInsightCard(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onExpandedChange(!expanded) },
+                    ) {
                         Box(
                             modifier = Modifier
                                 .size(22.dp)
@@ -276,6 +313,21 @@ fun WeeklyGoalsInsightCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                if (!expanded) {
+                    val teaser = insight.boldPart.trim().ifEmpty {
+                        insight.insightText.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
+                    }
+                    if (teaser.isNotEmpty()) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = teaser,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
                 AnimatedVisibility(visible = expanded) {
                     val scroll = rememberScrollState()
                     val bodyModifier = if (scrollableBodyMaxHeight != null) {
@@ -297,12 +349,23 @@ fun WeeklyGoalsInsightCard(
                             )
                             Spacer(Modifier.height(4.dp))
                         }
-                        InsightMarkdownBody(markdown = insight.insightText)
+                        MarkdownSummaryBody(
+                            markdown = insight.insightText,
+                            style = MarkdownSummaryStyle.CompactRich,
+                        )
                         if (insight.recoveryPlan != null) {
-                            Spacer(Modifier.height(6.dp))
-                            InsightMarkdownBody(
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "Focus to finish",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = AccentGreen,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            MarkdownSummaryBody(
                                 markdown = insight.recoveryPlan,
                                 baseColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MarkdownSummaryStyle.CompactRich,
                             )
                         }
                     }
@@ -402,25 +465,3 @@ private fun SpiritualReflectionCard(note: SpiritualNote) {
     }
 }
 
-@Composable
-private fun InsightMarkdownBody(
-    markdown: String,
-    baseColor: Color? = null,
-) {
-    if (markdown.isBlank()) return
-    val scheme = MaterialTheme.colorScheme
-    val textColor = baseColor ?: scheme.onSurface
-    val colors = markdownColor(
-        text = textColor,
-        codeText = scheme.onSurfaceVariant,
-        inlineCodeText = scheme.onSurfaceVariant,
-        linkText = scheme.primary,
-        codeBackground = scheme.surfaceContainerHighest,
-        inlineCodeBackground = scheme.surfaceContainerHigh,
-    )
-    Markdown(
-        content = markdown,
-        colors = colors,
-        modifier = Modifier.fillMaxWidth(),
-    )
-}

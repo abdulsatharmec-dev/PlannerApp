@@ -30,6 +30,8 @@ fun TimelineEventCard(
     contentAlpha: Float = 1f,
     accentColorOverride: Color? = null,
     showDurationMinutes: Boolean = true,
+    /** Simultaneous columns under ~118dp: tighter horizontal rhythm. */
+    narrowTrackColumn: Boolean = false,
 ) {
     val accentColor = accentColorOverride ?: when (event.priority) {
         EventPriority.HIGH   -> AccentRed
@@ -48,10 +50,16 @@ fun TimelineEventCard(
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val cardMaxH = this.maxHeight
+            val cardMaxW = this.maxWidth
             val tiny = cardMaxH < 40.dp
-            val compact = cardMaxH < 76.dp
+            val compact = cardMaxH < 76.dp || narrowTrackColumn
             val showDuration = showDurationMinutes && cardMaxH >= 42.dp
-            val padH = if (compact) 8.dp else 12.dp
+            val padH = when {
+                narrowTrackColumn && cardMaxW < 100.dp -> 6.dp
+                narrowTrackColumn -> 7.dp
+                compact -> 8.dp
+                else -> 12.dp
+            }
             val padV = if (tiny) 4.dp else if (compact) 6.dp else 10.dp
 
             Row(modifier = Modifier.fillMaxSize()) {
@@ -84,7 +92,7 @@ fun TimelineEventCard(
                                 MaterialTheme.typography.titleSmall.copy(
                                     color = MaterialTheme.colorScheme.onSurface,
                                     fontWeight = FontWeight.SemiBold,
-                                    lineHeight = 18.sp,
+                                    lineHeight = if (narrowTrackColumn) 17.sp else 18.sp,
                                 )
                             } else {
                                 MaterialTheme.typography.titleMedium.copy(
@@ -95,7 +103,7 @@ fun TimelineEventCard(
                             modifier = Modifier.weight(1f),
                             maxLines = when {
                                 tiny -> 1
-                                compact -> 2
+                                compact -> if (narrowTrackColumn) 3 else 2
                                 else -> 4
                             },
                             overflow = TextOverflow.Ellipsis,
@@ -144,14 +152,15 @@ fun TimelineEventCard(
                         }
                     }
                     if (!tiny && cardMaxH >= 70.dp && event.tags.isNotEmpty()) {
-                        Spacer(Modifier.height(6.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Spacer(Modifier.height(if (narrowTrackColumn) 4.dp else 6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(if (narrowTrackColumn) 4.dp else 6.dp)) {
+                            val chipPadH = if (narrowTrackColumn) 6.dp else 8.dp
                             event.tags.forEach { tag ->
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(4.dp))
                                         .background(Primary.copy(alpha = 0.12f))
-                                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                                        .padding(horizontal = chipPadH, vertical = 3.dp),
                                 ) {
                                     Text(
                                         tag,

@@ -1,7 +1,11 @@
 package com.dailycurator.pomodoro
 
+import android.app.AlarmManager
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.os.Build
 import androidx.core.content.ContextCompat
 import com.dailycurator.di.ApplicationScope
 import com.dailycurator.data.local.entity.PomodoroSessionEntity
@@ -45,13 +49,32 @@ class PomodoroTimerController @Inject constructor(
     private var tickJob: Job? = null
     private var activeRow: PomodoroSessionEntity? = null
 
+    /** Wall-clock instant when the current running phase should hit zero; 0 when paused or idle. */
+    private var phaseEndWallClockMillis: Long = 0L
+
     fun onScreenResume() {
+        syncWallClockIfRunning()
         val p = bridge.consume() ?: return
         if (_ui.value.sessionActive) return
         _ui.value = PomodoroUiState(
             launch = p,
             plannedMinutes = p.plannedMinutes.coerceIn(1, 180),
         )
+    }
+
+    /**
+     * Refreshes remaining time from the deadline (UI + notification catch-up after unlock / resume).
+     */
+    private fun syncWallClockIfRunning() {
+        val s = _ui.value
+        if (!s.running || !s.sessionActive || phaseEndWallClockMillis <= 0L) return
+        val rem = remainingSecondsFromDeadline()
+        if (rem <= 0) {
+            scope.launch { completeDueToAlarm() }
+            return
+        }
+        _ui.value = s.copy(remainingSeconds = rem)
+        refreshNotification()
     }
 
     fun setPlannedMinutes(minutes: Int) {
@@ -75,7 +98,14 @@ class PomodoroTimerController @Inject constructor(
 
     fun pause() {
         tickJob?.cancel()
-        _ui.value = _ui.value.copy(running = false)
+        val rem = if (phaseEndWallClockMillis > 0L) {
+            remainingSecondsFromDeadline()
+        } else {
+            _ui.value.remainingSeconds ?: 0
+        }
+        cancelPhaseEndAlarm()
+        phaseEndWallClockMillis = 0L
+        _ui.value = _ui.value.copy(running = false, remainingSeconds = rem.coerceAtLeast(0))
         refreshNotification()
     }
 
@@ -89,6 +119,8 @@ class PomodoroTimerController @Inject constructor(
 
     private suspend fun endSessionEarlyInternal() {
         tickJob?.cancel()
+        cancelPhaseEndAlarm()
+        phaseEndWallClockMillis = 0L
         _ui.value = _ui.value.copy(running = false)
         finishSession(completed = false)
     }
@@ -100,6 +132,16 @@ class PomodoroTimerController @Inject constructor(
         }
         _ui.value = PomodoroUiState(launch = null, plannedMinutes = mins)
         stopForegroundAndNotif()
+    }
+
+    suspend fun completeDueToAlarm() {
+        if (!_ui.value.sessionActive || !_ui.value.running) return
+        tickJob?.cancel()
+        tickJob = null
+        cancelPhaseEndAlarm()
+        phaseEndWallClockMillis = 0L
+        _ui.value = _ui.value.copy(remainingSeconds = 0, running = false)
+        finishSession(completed = true)
     }
 
     private suspend fun startNewSession() {
@@ -140,22 +182,73 @@ class PomodoroTimerController @Inject constructor(
     private fun startTicks() {
         tickJob?.cancel()
         tickJob = scope.launch {
+            val rem0 = _ui.value.remainingSeconds ?: 0
+            if (rem0 <= 0) return@launch
+            phaseEndWallClockMillis = System.currentTimeMillis() + rem0 * 1000L
+            schedulePhaseEndAlarm(phaseEndWallClockMillis)
             while (isActive && _ui.value.running) {
-                delay(1_000)
-                if (!_ui.value.running) break
-                val rem = (_ui.value.remainingSeconds ?: 0) - 1
+                val rem = remainingSecondsFromDeadline()
                 if (rem <= 0) {
+                    cancelPhaseEndAlarm()
+                    phaseEndWallClockMillis = 0L
                     _ui.value = _ui.value.copy(remainingSeconds = 0, running = false)
                     finishSession(completed = true)
                     break
                 }
                 _ui.value = _ui.value.copy(remainingSeconds = rem)
                 refreshNotification()
+                val msLeft = (phaseEndWallClockMillis - System.currentTimeMillis()).coerceAtLeast(0L)
+                delay(msLeft.coerceIn(250L..1_000L))
             }
         }
     }
 
+    private fun remainingSecondsFromDeadline(): Int {
+        if (phaseEndWallClockMillis <= 0L) return _ui.value.remainingSeconds ?: 0
+        val msLeft = phaseEndWallClockMillis - System.currentTimeMillis()
+        return ((msLeft + 999) / 1000).toInt().coerceAtLeast(0)
+    }
+
+    private fun phaseAlarmPendingIntent(): PendingIntent {
+        val intent = Intent(appContext, PomodoroActionReceiver::class.java).apply {
+            action = PomodoroNotificationActions.TIMER_PHASE_COMPLETE
+        }
+        return PendingIntent.getBroadcast(
+            appContext,
+            POMODORO_PHASE_ALARM_REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    private fun schedulePhaseEndAlarm(triggerMillis: Long) {
+        val am = appContext.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val pi = phaseAlarmPendingIntent()
+        cancelPhaseEndAlarm()
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                am.setAlarmClock(
+                    AlarmManager.AlarmClockInfo(triggerMillis, pi),
+                    pi,
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                am.setExact(AlarmManager.RTC_WAKEUP, triggerMillis, pi)
+            }
+        } catch (_: SecurityException) {
+            @Suppress("DEPRECATION")
+            am.set(AlarmManager.RTC_WAKEUP, triggerMillis, pi)
+        }
+    }
+
+    private fun cancelPhaseEndAlarm() {
+        val am = appContext.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        am.cancel(phaseAlarmPendingIntent())
+    }
+
     private suspend fun finishSession(completed: Boolean) {
+        cancelPhaseEndAlarm()
+        phaseEndWallClockMillis = 0L
         val row = activeRow ?: return
         val actual = if (completed) row.plannedDurationSeconds else elapsedSeconds()
         repo.update(
@@ -202,14 +295,26 @@ class PomodoroTimerController @Inject constructor(
             },
             android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE,
         )
-        val notif = androidx.core.app.NotificationCompat.Builder(appContext, ReminderNotificationIds.CHANNEL_ID)
+        val notif = androidx.core.app.NotificationCompat.Builder(
+            appContext,
+            PomodoroNotificationIds.COMPLETE_CHANNEL_ID,
+        )
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("Pomodoro complete")
             .setContentText(title)
             .setContentIntent(open)
             .setAutoCancel(true)
-            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(androidx.core.app.NotificationCompat.CATEGORY_EVENT)
+            .setDefaults(
+                androidx.core.app.NotificationCompat.DEFAULT_SOUND or
+                    androidx.core.app.NotificationCompat.DEFAULT_VIBRATE,
+            )
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
             .build()
         nm.notify(7102, notif)
+    }
+
+    companion object {
+        private const val POMODORO_PHASE_ALARM_REQUEST_CODE = 7199
     }
 }

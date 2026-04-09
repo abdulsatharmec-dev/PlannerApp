@@ -60,7 +60,7 @@ fun PhoneUsageScreen(viewModel: PhoneUsageViewModel = hiltViewModel()) {
     val llmOk by viewModel.llmConfigured.collectAsState()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    var usageInsightExpanded by rememberSaveable { mutableStateOf(true) }
+    var usageInsightExpanded by rememberSaveable { mutableStateOf(false) }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->

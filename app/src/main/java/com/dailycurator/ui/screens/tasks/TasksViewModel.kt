@@ -43,6 +43,10 @@ data class TasksUiState(
     val tasksByDay: Map<LocalDate, List<PriorityTask>> = emptyMap(),
     val prioritySections: List<Pair<String, List<PriorityTask>>> = emptyList(),
     val activeGoals: List<WeeklyGoal> = emptyList(),
+    /** When false, completed tasks are hidden from lists and week previews. */
+    val showCompletedTasks: Boolean = false,
+    /** True when the day has tasks but all are completed and hidden by the filter. */
+    val allTasksDoneHidden: Boolean = false,
 )
 
 private fun LocalDate.startOfWeek(locale: Locale = Locale.getDefault()): LocalDate {
@@ -95,6 +99,7 @@ class TasksViewModel @Inject constructor(
 
     private val listDate = MutableStateFlow(LocalDate.now())
     private val displayMode = MutableStateFlow(TasksDisplayMode.WEEK_CALENDAR)
+    private val showCompletedTasks = MutableStateFlow(false)
     private val activeGoals = goalRepo.getActiveGoals().stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
@@ -104,33 +109,47 @@ class TasksViewModel @Inject constructor(
     val uiState: StateFlow<TasksUiState> = combine(
         listDate,
         displayMode,
-        listDate.flatMapLatest { d -> repo.getTasksForDate(d) },
-        listDate.flatMapLatest { d ->
-            val start = d.startOfWeek()
-            val end = start.plusDays(6)
-            repo.getTasksBetween(start, end).map { tasks ->
-                tasks.groupBy { it.date }.mapValues { (_, v) -> v.sortedWith(compareTasks()) }
+        showCompletedTasks,
+    ) { date, mode, showDone -> Triple(date, mode, showDone) }
+        .flatMapLatest { (date, mode, showDone) ->
+            val weekRangeFlow = run {
+                val start = date.startOfWeek()
+                val end = start.plusDays(6)
+                repo.getTasksBetween(start, end).map { tasks ->
+                    tasks.groupBy { it.date }.mapValues { (_, v) -> v.sortedWith(compareTasks()) }
+                }
             }
-        },
-        activeGoals,
-    ) { date, mode, tasksForDay, byDay, goals ->
-        val weekStart = date.startOfWeek()
-        val weekDays = (0L..6L).map { weekStart.plusDays(it) }
-        val sortedDay = tasksForDay.sortedWith(compareTasks())
-        TasksUiState(
-            displayMode = mode,
-            listDate = date,
-            weekDays = weekDays,
-            tasks = sortedDay,
-            tasksByDay = byDay,
-            prioritySections = buildPrioritySections(sortedDay),
-            activeGoals = goals,
+            combine(
+                repo.getTasksForDate(date),
+                weekRangeFlow,
+                activeGoals,
+            ) { tasksForDay, byDay, goals ->
+                val weekStart = date.startOfWeek()
+                val weekDays = (0L..6L).map { weekStart.plusDays(it) }
+                val filter: (List<PriorityTask>) -> List<PriorityTask> = { list ->
+                    if (showDone) list else list.filter { !it.isDone }
+                }
+                val sortedDay = filter(tasksForDay).sortedWith(compareTasks())
+                val filteredByDay = byDay.mapValues { (_, v) -> filter(v).sortedWith(compareTasks()) }
+                val allDoneHidden = !showDone && tasksForDay.isNotEmpty() && sortedDay.isEmpty()
+                TasksUiState(
+                    displayMode = mode,
+                    listDate = date,
+                    weekDays = weekDays,
+                    tasks = sortedDay,
+                    tasksByDay = filteredByDay,
+                    prioritySections = buildPrioritySections(sortedDay),
+                    activeGoals = goals,
+                    showCompletedTasks = showDone,
+                    allTasksDoneHidden = allDoneHidden,
+                )
+            }
+        }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            TasksUiState(),
         )
-    }.stateIn(
-        viewModelScope,
-        SharingStarted.WhileSubscribed(5_000),
-        TasksUiState(),
-    )
 
     fun setListDate(date: LocalDate) {
         listDate.value = date
@@ -138,6 +157,10 @@ class TasksViewModel @Inject constructor(
 
     fun setDisplayMode(mode: TasksDisplayMode) {
         displayMode.value = mode
+    }
+
+    fun setShowCompletedTasks(show: Boolean) {
+        showCompletedTasks.value = show
     }
 
     fun shiftSelectedWeek(weeks: Long) {
