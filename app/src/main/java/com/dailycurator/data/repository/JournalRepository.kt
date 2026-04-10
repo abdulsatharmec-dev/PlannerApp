@@ -21,6 +21,7 @@ private fun JournalEntryEntity.toModel() = JournalEntry(
     includeInAgentChat = includeInAgentChat,
     includeInAssistantInsight = includeInAssistantInsight,
     includeInWeeklyGoalsInsight = includeInWeeklyGoalsInsight,
+    isEvergreen = isEvergreen,
 )
 
 private fun JournalEntry.toEntity() = JournalEntryEntity(
@@ -32,6 +33,7 @@ private fun JournalEntry.toEntity() = JournalEntryEntity(
     includeInAgentChat = includeInAgentChat,
     includeInAssistantInsight = includeInAssistantInsight,
     includeInWeeklyGoalsInsight = includeInWeeklyGoalsInsight,
+    isEvergreen = isEvergreen,
 )
 
 private fun JournalEntry.localDay(zone: ZoneId): LocalDate =

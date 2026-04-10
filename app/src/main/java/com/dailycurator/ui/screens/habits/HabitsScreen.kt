@@ -1,23 +1,16 @@
 package com.dailycurator.ui.screens.habits
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.dailycurator.data.model.HabitType
@@ -38,6 +31,7 @@ fun HabitsScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     var showAddHabit by remember { mutableStateOf(false) }
+    var habitsMenuOpen by remember { mutableStateOf(false) }
     var habitToMarkDone by remember { mutableStateOf<Habit?>(null) }
     var selectedHabit by remember { mutableStateOf<Habit?>(null) }
     var habitToEdit by remember { mutableStateOf<Habit?>(null) }
@@ -148,137 +142,64 @@ fun HabitsScreen(
             .appScreenBackground(),
         contentPadding = PaddingValues(bottom = 32.dp)
     ) {
-        // App bar
         item {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Default.AutoAwesome, contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Curator",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        color = MaterialTheme.colorScheme.primary))
-                Spacer(Modifier.weight(1f))
-                Icon(Icons.Default.GridView, contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.width(12.dp))
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(androidx.compose.foundation.shape.CircleShape)
-                        .background(MaterialTheme.colorScheme.primary),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("A", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-
-        // Header
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-                verticalAlignment = Alignment.Bottom
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("PERFORMANCE TRACK",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            letterSpacing = 1.sp))
-                    Text("Habits",
-                        style = MaterialTheme.typography.displayLarge.copy(
-                            color = MaterialTheme.colorScheme.onBackground))
-                }
-                Button(
-                    onClick = { showAddHabit = true },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("New Habit",
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.SemiBold))
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-
-            // Toggle show completed
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Show completed habits", style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant))
-                Switch(
-                    checked = state.showCompleted,
-                    onCheckedChange = { viewModel.toggleShowCompleted() }
+                Text(
+                    "Habits",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
                 )
-            }
-            Spacer(Modifier.height(8.dp))
-        }
-
-        // AI Habit Extractor card
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(0.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(AccentTeal.copy(alpha = 0.1f)),
-                        contentAlignment = Alignment.Center
+                Spacer(Modifier.weight(1f))
+                Box {
+                    IconButton(onClick = { habitsMenuOpen = true }) {
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = "More options",
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = habitsMenuOpen,
+                        onDismissRequest = { habitsMenuOpen = false },
                     ) {
-                        Icon(Icons.Default.AutoAwesome, contentDescription = null,
-                            tint = AccentTeal, modifier = Modifier.size(24.dp))
+                        Row(
+                            modifier = Modifier
+                                .widthIn(min = 220.dp)
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "Show completed",
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Switch(
+                                checked = state.showCompleted,
+                                onCheckedChange = {
+                                    viewModel.toggleShowCompleted()
+                                },
+                            )
+                        }
                     }
-                    Spacer(Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("AI Habit Extractor",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                color = MaterialTheme.colorScheme.onSurface))
-                        Text("Analyze your journal for new habits",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = MaterialTheme.colorScheme.onSurfaceVariant))
-                    }
-                    Icon(Icons.Default.Add, contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp))
+                }
+                IconButton(onClick = { showAddHabit = true }) {
+                    Icon(Icons.Default.Add, contentDescription = "Add habit")
                 }
             }
-            Spacer(Modifier.height(24.dp))
         }
 
-        // ── BUILDING MOMENTUM
         item {
-            Text("BUILDING MOMENTUM",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.5.sp),
-                modifier = Modifier.padding(horizontal = 20.dp))
-            Spacer(Modifier.height(10.dp))
+            Text(
+                "Building",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 20.dp, top = 8.dp, end = 20.dp),
+            )
+            Spacer(Modifier.height(8.dp))
         }
 
         items(state.buildingHabits, key = { it.id }) { habit ->
@@ -291,14 +212,15 @@ fun HabitsScreen(
             Spacer(Modifier.height(12.dp))
         }
 
-        // ── ELIMINATING FRICTION
         item {
             Spacer(Modifier.height(8.dp))
-            Text("ELIMINATING FRICTION",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    color = AccentRed, letterSpacing = 1.5.sp),
-                modifier = Modifier.padding(horizontal = 20.dp))
-            Spacer(Modifier.height(10.dp))
+            Text(
+                "Eliminating",
+                style = MaterialTheme.typography.titleSmall,
+                color = AccentRed,
+                modifier = Modifier.padding(horizontal = 20.dp),
+            )
+            Spacer(Modifier.height(8.dp))
         }
 
         items(state.eliminatingHabits, key = { it.id }) { habit ->

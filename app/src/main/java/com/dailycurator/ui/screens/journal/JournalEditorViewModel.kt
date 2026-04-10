@@ -35,6 +35,9 @@ class JournalEditorViewModel @Inject constructor(
     private val _includeInWeeklyGoalsInsight = MutableStateFlow(true)
     val includeInWeeklyGoalsInsight: StateFlow<Boolean> = _includeInWeeklyGoalsInsight.asStateFlow()
 
+    private val _isEvergreen = MutableStateFlow(false)
+    val isEvergreen: StateFlow<Boolean> = _isEvergreen.asStateFlow()
+
     private val _ready = MutableStateFlow(false)
     val ready: StateFlow<Boolean> = _ready.asStateFlow()
 
@@ -49,6 +52,7 @@ class JournalEditorViewModel @Inject constructor(
                     _includeInAgentChat.value = it.includeInAgentChat
                     _includeInAssistantInsight.value = it.includeInAssistantInsight
                     _includeInWeeklyGoalsInsight.value = it.includeInWeeklyGoalsInsight
+                    _isEvergreen.value = it.isEvergreen
                 }
             }
             _ready.value = true
@@ -75,6 +79,10 @@ class JournalEditorViewModel @Inject constructor(
         _includeInWeeklyGoalsInsight.value = value
     }
 
+    fun setEvergreen(value: Boolean) {
+        _isEvergreen.value = value
+    }
+
     fun save(onDone: () -> Unit) = viewModelScope.launch {
         val now = System.currentTimeMillis()
         val t = derivedTitle(_title.value, _body.value)
@@ -89,6 +97,7 @@ class JournalEditorViewModel @Inject constructor(
                     includeInAgentChat = _includeInAgentChat.value,
                     includeInAssistantInsight = _includeInAssistantInsight.value,
                     includeInWeeklyGoalsInsight = _includeInWeeklyGoalsInsight.value,
+                    isEvergreen = _isEvergreen.value,
                 ),
             )
         } else {
@@ -101,6 +110,7 @@ class JournalEditorViewModel @Inject constructor(
                     includeInAgentChat = _includeInAgentChat.value,
                     includeInAssistantInsight = _includeInAssistantInsight.value,
                     includeInWeeklyGoalsInsight = _includeInWeeklyGoalsInsight.value,
+                    isEvergreen = _isEvergreen.value,
                 ),
             )
         }

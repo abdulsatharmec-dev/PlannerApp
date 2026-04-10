@@ -14,4 +14,6 @@ data class JournalEntryEntity(
     val includeInAgentChat: Boolean = true,
     val includeInAssistantInsight: Boolean = true,
     val includeInWeeklyGoalsInsight: Boolean = true,
+    /** Affirmations / reminders: listed on every day in the journal browser. */
+    val isEvergreen: Boolean = false,
 )

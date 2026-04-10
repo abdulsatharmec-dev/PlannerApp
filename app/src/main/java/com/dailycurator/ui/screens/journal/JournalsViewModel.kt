@@ -5,19 +5,100 @@ import androidx.lifecycle.viewModelScope
 import com.dailycurator.data.model.JournalEntry
 import com.dailycurator.data.repository.JournalRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
+
+sealed class JournalListRow {
+    data class SectionHeader(val title: String) : JournalListRow()
+    data class EntryRow(val entry: JournalEntry) : JournalListRow()
+}
 
 @HiltViewModel
 class JournalsViewModel @Inject constructor(
     private val repo: JournalRepository,
 ) : ViewModel() {
 
-    val entries: StateFlow<List<JournalEntry>> =
-        repo.observeAll().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val zone: ZoneId = ZoneId.systemDefault()
+    private val dayHeaderFmt: DateTimeFormatter =
+        DateTimeFormatter.ofPattern("EEEE, MMM d")
+
+    private val _filterDate = MutableStateFlow<LocalDate?>(null)
+    val filterDate: StateFlow<LocalDate?> = _filterDate.asStateFlow()
+
+    private val _evergreenOnly = MutableStateFlow(false)
+    val evergreenOnly: StateFlow<Boolean> = _evergreenOnly.asStateFlow()
+
+    val listRows: StateFlow<List<JournalListRow>> = combine(
+        repo.observeAll(),
+        _filterDate,
+        _evergreenOnly,
+    ) { all, filterDay, evOnly ->
+        buildList {
+            fun entryDay(e: JournalEntry): LocalDate =
+                Instant.ofEpochMilli(e.updatedAtEpochMillis).atZone(zone).toLocalDate()
+
+            when {
+                evOnly -> {
+                    all.filter { it.isEvergreen }
+                        .sortedByDescending { it.updatedAtEpochMillis }
+                        .forEach { add(JournalListRow.EntryRow(it)) }
+                }
+                filterDay != null -> {
+                    all.filter { entryDay(it) == filterDay }
+                        .sortedByDescending { it.updatedAtEpochMillis }
+                        .forEach { add(JournalListRow.EntryRow(it)) }
+                }
+                else -> {
+                    val evergreen = all.filter { it.isEvergreen }
+                        .sortedByDescending { it.updatedAtEpochMillis }
+                    if (evergreen.isNotEmpty()) {
+                        add(JournalListRow.SectionHeader("Every day"))
+                        evergreen.forEach { add(JournalListRow.EntryRow(it)) }
+                    }
+                    val byDay = all
+                        .filter { !it.isEvergreen }
+                        .groupBy { entryDay(it) }
+                        .toList()
+                        .sortedByDescending { it.first }
+                    for ((day, entriesOnDay) in byDay) {
+                        add(JournalListRow.SectionHeader(day.format(dayHeaderFmt)))
+                        entriesOnDay
+                            .sortedByDescending { it.updatedAtEpochMillis }
+                            .forEach { add(JournalListRow.EntryRow(it)) }
+                    }
+                }
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun setFilterDate(date: LocalDate?) {
+        _filterDate.value = date
+        if (date != null) _evergreenOnly.value = false
+    }
+
+    fun setEvergreenOnly(value: Boolean) {
+        _evergreenOnly.value = value
+        if (value) _filterDate.value = null
+    }
+
+    fun clearFilters() {
+        _filterDate.value = null
+        _evergreenOnly.value = false
+    }
+
+    fun toggleEvergreen(entry: JournalEntry) = viewModelScope.launch {
+        repo.update(entry.copy(isEvergreen = !entry.isEvergreen))
+    }
 
     fun save(rawTitle: String, body: String, existing: JournalEntry?) = viewModelScope.launch {
         val now = System.currentTimeMillis()

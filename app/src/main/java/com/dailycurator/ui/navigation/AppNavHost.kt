@@ -41,9 +41,13 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.dailycurator.ui.screens.chat.ChatScreen
 import com.dailycurator.ui.screens.gmail.GmailMailboxSummaryScreen
 import com.dailycurator.ui.screens.goals.GoalsScreen
+import com.dailycurator.ui.screens.schedule.ScheduleScreen
+import com.dailycurator.ui.screens.schedule.ScheduleTopAppBar
+import com.dailycurator.ui.screens.schedule.ScheduleViewModel
 import com.dailycurator.ui.screens.habits.HabitsScreen
 import com.dailycurator.ui.screens.journal.JournalEditorScreen
 import com.dailycurator.ui.screens.journal.JournalsScreen
@@ -101,6 +105,7 @@ fun AppNavHost(
     val gmailDrawerSelected = currentRoute == Screen.GmailMailboxSummary.route
     val memoryDrawerSelected = currentRoute == Screen.AgentMemory.route
     val phoneUsageDrawerSelected = currentRoute == Screen.PhoneUsage.route
+    val goalsDrawerSelected = currentRoute == Screen.Goals.route
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -113,6 +118,27 @@ fun AppNavHost(
                     modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp),
                 )
                 Spacer(Modifier.height(8.dp))
+                NavigationDrawerItem(
+                    icon = { Icon(Screen.Goals.icon, contentDescription = null) },
+                    label = { Text("Goals") },
+                    selected = goalsDrawerSelected,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        navController.navigate(Screen.Goals.route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                    colors = NavigationDrawerItemDefaults.colors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        selectedTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ),
+                )
                 NavigationDrawerItem(
                     icon = { Icon(Screen.Journal.icon, contentDescription = null) },
                     label = { Text("Journaling") },
@@ -199,8 +225,61 @@ fun AppNavHost(
             containerColor = appScaffoldContainerColor(),
             topBar = {
                 if (!isJournalEditor) {
-                    when (val sub = subPageTitle(currentRoute)) {
-                        null -> {
+                    when {
+                        currentRoute == Screen.Schedule.route -> {
+                            val entry = navController.currentBackStackEntry
+                            if (entry != null) {
+                                val scheduleVm: ScheduleViewModel = hiltViewModel(entry)
+                                ScheduleTopAppBar(
+                                    viewModel = scheduleVm,
+                                    onOpenMenu = { scope.launch { drawerState.open() } },
+                                    onNavigateSettings = { navController.navigate(Screen.Settings.route) },
+                                )
+                            } else {
+                                CenterAlignedTopAppBar(
+                                    title = { Text("Schedule", style = MaterialTheme.typography.titleMedium) },
+                                    navigationIcon = {
+                                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                            Icon(Icons.Default.Menu, contentDescription = "Open menu")
+                                        }
+                                    },
+                                    actions = {
+                                        IconButton(onClick = { navController.navigate(Screen.Settings.route) }) {
+                                            Icon(
+                                                Icons.Default.Settings,
+                                                contentDescription = "Settings",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    },
+                                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                                        containerColor = appScaffoldContainerColor(),
+                                    ),
+                                )
+                            }
+                        }
+                        currentRoute == Screen.Tasks.route -> {
+                            // TasksScreen provides its own title row + actions; skip duplicate top app bar.
+                        }
+                        subPageTitle(currentRoute) != null -> {
+                            TopAppBar(
+                                title = {
+                                    Text(
+                                        subPageTitle(currentRoute)!!,
+                                        style = MaterialTheme.typography.titleMedium,
+                                    )
+                                },
+                                navigationIcon = {
+                                    IconButton(onClick = { navController.popBackStack() }) {
+                                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                                    }
+                                },
+                                colors = TopAppBarDefaults.topAppBarColors(
+                                    containerColor = appScaffoldContainerColor(),
+                                ),
+                            )
+                        }
+                        else -> {
                             CenterAlignedTopAppBar(
                                 title = {
                                     Text(
@@ -225,19 +304,6 @@ fun AppNavHost(
                                     }
                                 },
                                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                                    containerColor = appScaffoldContainerColor(),
-                                ),
-                            )
-                        }
-                        else -> {
-                            TopAppBar(
-                                title = { Text(sub, style = MaterialTheme.typography.titleMedium) },
-                                navigationIcon = {
-                                    IconButton(onClick = { navController.popBackStack() }) {
-                                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                                    }
-                                },
-                                colors = TopAppBarDefaults.topAppBarColors(
                                     containerColor = appScaffoldContainerColor(),
                                 ),
                             )
@@ -301,9 +367,12 @@ fun AppNavHost(
                         },
                     )
                 }
+                composable(Screen.Schedule.route) { ScheduleScreen() }
                 composable(Screen.Tasks.route) {
                     TasksScreen(
                         onNavigateToPomodoro = { navController.navigate(Screen.Pomodoro.route) },
+                        onOpenDrawer = { scope.launch { drawerState.open() } },
+                        onNavigateSettings = { navController.navigate(Screen.Settings.route) },
                     )
                 }
                 composable(Screen.Habits.route) {

@@ -36,7 +36,7 @@ import java.time.format.DateTimeFormatter
         CachedInsightEntity::class, JournalEntryEntity::class, HabitLogEntity::class,
         PomodoroSessionEntity::class, AgentMemoryEntity::class,
     ],
-    version = 16,
+    version = 17,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -181,6 +181,14 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE journal_entries ADD COLUMN isEvergreen INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
         private val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE habits ADD COLUMN seriesId TEXT NOT NULL DEFAULT ''")
@@ -252,6 +260,7 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_13_14,
                         MIGRATION_14_15,
                         MIGRATION_15_16,
+                        MIGRATION_16_17,
                     )
                     .fallbackToDestructiveMigration()
                     .addCallback(object : Callback() {

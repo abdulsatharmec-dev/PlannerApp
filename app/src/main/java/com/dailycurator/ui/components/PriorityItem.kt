@@ -6,7 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -23,6 +22,8 @@ import androidx.compose.ui.unit.sp
 import com.dailycurator.data.model.PriorityTask
 import com.dailycurator.data.model.Urgency
 import com.dailycurator.ui.theme.*
+
+private val TaskDoneToggleShape = RoundedCornerShape(5.dp)
 
 /** Day-wide order for auto list numbers: rank, then start time, then stable id. */
 fun tasksSortedForListNumber(tasks: List<PriorityTask>): List<PriorityTask> =
@@ -125,19 +126,19 @@ fun PriorityItem(
                     }
                     Spacer(Modifier.width(4.dp))
                 }
-                // Done toggle
+                // Done toggle — rounded square (not circular)
                 Box(
                     modifier = Modifier
                         .size(22.dp)
-                        .clip(CircleShape)
+                        .clip(TaskDoneToggleShape)
                         .background(checkColor)
                         .border(
                             1.5.dp,
                             if (task.isDone) AccentGreen else MaterialTheme.colorScheme.onSurfaceVariant,
-                            CircleShape
+                            TaskDoneToggleShape,
                         )
                         .clickable { onToggleDone() },
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.Center,
                 ) {
                     if (task.isDone) {
                         Icon(Icons.Default.Check, contentDescription = "Done",

@@ -9,10 +9,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,7 +28,6 @@ import com.dailycurator.data.model.Urgency
 import com.dailycurator.data.model.WeeklyGoal
 import com.dailycurator.ui.components.GoalDetailBottomSheet
 import com.dailycurator.ui.components.GoalTileCard
-import com.dailycurator.ui.components.PickDateDialog
 import com.dailycurator.ui.components.*
 import com.dailycurator.ui.screens.goals.GoalFormDialog
 import com.dailycurator.ui.theme.*
@@ -122,20 +119,6 @@ fun TodayScreen(
         )
     }
 
-    var showScheduleDatePicker by remember { mutableStateOf(false) }
-    val scheduleDateHeaderFmt = remember { DateTimeFormatter.ofPattern("EEE, MMM d") }
-    val scheduleDateLabel = state.scheduleTimelineDate.format(scheduleDateHeaderFmt)
-    val scheduleShowsToday = state.scheduleTimelineDate == LocalDate.now()
-
-    PickDateDialog(
-        visible = showScheduleDatePicker,
-        initialDate = state.scheduleTimelineDate,
-        onDismiss = { showScheduleDatePicker = false },
-        onConfirm = {
-            viewModel.setScheduleTimelineDate(it)
-            showScheduleDatePicker = false
-        },
-    )
     var assistantExpanded by remember { mutableStateOf(false) }
     var weeklyInsightExpanded by remember { mutableStateOf(false) }
     var top5Expanded by remember { mutableStateOf(true) }
@@ -335,21 +318,6 @@ fun TodayScreen(
             Spacer(Modifier.height(24.dp))
         }
 
-        // ── Today's Schedule
-        item {
-            TodayScheduleSection(
-                events = state.scheduleEvents,
-                activeTab = state.scheduleTab,
-                onTabChange = viewModel::setScheduleTab,
-                scheduleDate = state.scheduleTimelineDate,
-                scheduleDateLabel = scheduleDateLabel,
-                onScheduleDateClick = { showScheduleDatePicker = true },
-                showNowIndicator = scheduleShowsToday,
-                windowStart = state.dayWindowStart,
-                windowEnd = state.dayWindowEnd,
-            )
-        }
-
         item {
             if (state.homeGmailSummaryEnabled) {
                 Spacer(Modifier.height(16.dp))
@@ -510,94 +478,4 @@ private fun AddWeeklyGoalInlineDialog(onDismiss: () -> Unit, onConfirm: (String)
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
-}
-
-// ── Today's Schedule Section ───────────────────────────────────────────────
-
-@Composable
-private fun TodayScheduleSection(
-    events: List<com.dailycurator.data.model.ScheduleEvent>,
-    activeTab: ScheduleTab,
-    onTabChange: (ScheduleTab) -> Unit,
-    scheduleDate: LocalDate,
-    scheduleDateLabel: String,
-    onScheduleDateClick: () -> Unit,
-    showNowIndicator: Boolean,
-    windowStart: LocalTime,
-    windowEnd: LocalTime,
-) {
-    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-        Text("SCHEDULE",
-            style = MaterialTheme.typography.labelSmall.copy(
-                color = AccentGreen, fontWeight = FontWeight.Bold, letterSpacing = 1.sp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "Your day",
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    color = MaterialTheme.colorScheme.onBackground,
-                ),
-                modifier = Modifier.weight(1f),
-            )
-            IconButton(
-                onClick = onScheduleDateClick,
-                modifier = Modifier.size(40.dp),
-            ) {
-                Icon(
-                    Icons.Default.CalendarMonth,
-                    contentDescription = "Pick timeline date: $scheduleDateLabel",
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
-        Text(
-            scheduleDateLabel,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp),
-        )
-        Spacer(Modifier.height(4.dp))
-
-        // Tab chips
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ScheduleTab.values().forEach { tab ->
-                val isActive = activeTab == tab
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                        .clickable { onTabChange(tab) }
-                        .padding(horizontal = 16.dp, vertical = 7.dp)
-                ) {
-                    Text(tab.name.lowercase().replaceFirstChar { it.uppercase() },
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = if (isActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal))
-                }
-            }
-        }
-        Spacer(Modifier.height(14.dp))
-
-        // Timeline or Clock
-        Crossfade(targetState = activeTab, label = "schedule_tab") { tab ->
-            when (tab) {
-                ScheduleTab.TIMELINE -> ScheduleTimelineView(
-                    events = events,
-                    windowStart = windowStart,
-                    windowEnd = windowEnd,
-                    showNowIndicator = showNowIndicator,
-                    scheduleDate = scheduleDate,
-                )
-                ScheduleTab.CLOCK -> ClockView(
-                    events = events,
-                    windowStart = windowStart,
-                    windowEnd = windowEnd,
-                    useLiveNowIndicator = showNowIndicator,
-                    scheduleDayLabel = scheduleDateLabel,
-                )
-            }
-        }
-    }
 }

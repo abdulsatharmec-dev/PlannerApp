@@ -31,6 +31,9 @@ interface HabitLogDao {
     @Query("SELECT DISTINCT dayKey FROM habit_logs WHERE habitSeriesId = :seriesId ORDER BY dayKey ASC")
     suspend fun getAllCompletedDayKeys(seriesId: String): List<String>
 
+    @Query("SELECT * FROM habit_logs WHERE dayKey = :dayKey")
+    fun observeLogsForDay(dayKey: String): Flow<List<HabitLogEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(log: HabitLogEntity): Long
 

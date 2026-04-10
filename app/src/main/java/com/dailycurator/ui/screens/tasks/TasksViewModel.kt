@@ -19,17 +19,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalTime
-import java.time.temporal.WeekFields
-import java.util.Locale
 import javax.inject.Inject
 
 enum class TasksDisplayMode {
-    /** Week strip + tasks for the selected day (list order by rank / time). */
+    /** Tasks for the selected day (list order by rank / time). */
     WEEK_CALENDAR,
     /** Same selected day, tasks grouped by urgency. */
     PRIORITY_GROUPS,
@@ -38,25 +35,14 @@ enum class TasksDisplayMode {
 data class TasksUiState(
     val displayMode: TasksDisplayMode = TasksDisplayMode.WEEK_CALENDAR,
     val listDate: LocalDate = LocalDate.now(),
-    val weekDays: List<LocalDate> = emptyList(),
     val tasks: List<PriorityTask> = emptyList(),
-    val tasksByDay: Map<LocalDate, List<PriorityTask>> = emptyMap(),
     val prioritySections: List<Pair<String, List<PriorityTask>>> = emptyList(),
     val activeGoals: List<WeeklyGoal> = emptyList(),
-    /** When false, completed tasks are hidden from lists and week previews. */
+    /** When false, completed tasks are hidden from the list. */
     val showCompletedTasks: Boolean = false,
     /** True when the day has tasks but all are completed and hidden by the filter. */
     val allTasksDoneHidden: Boolean = false,
 )
-
-private fun LocalDate.startOfWeek(locale: Locale = Locale.getDefault()): LocalDate {
-    val first = WeekFields.of(locale).firstDayOfWeek
-    var cursor = this
-    while (cursor.dayOfWeek != first) {
-        cursor = cursor.minusDays(1)
-    }
-    return cursor
-}
 
 private fun compareTasks(): Comparator<PriorityTask> =
     compareBy<PriorityTask> { it.rank }.thenBy { it.startTime }
@@ -112,32 +98,19 @@ class TasksViewModel @Inject constructor(
         showCompletedTasks,
     ) { date, mode, showDone -> Triple(date, mode, showDone) }
         .flatMapLatest { (date, mode, showDone) ->
-            val weekRangeFlow = run {
-                val start = date.startOfWeek()
-                val end = start.plusDays(6)
-                repo.getTasksBetween(start, end).map { tasks ->
-                    tasks.groupBy { it.date }.mapValues { (_, v) -> v.sortedWith(compareTasks()) }
-                }
-            }
             combine(
                 repo.getTasksForDate(date),
-                weekRangeFlow,
                 activeGoals,
-            ) { tasksForDay, byDay, goals ->
-                val weekStart = date.startOfWeek()
-                val weekDays = (0L..6L).map { weekStart.plusDays(it) }
+            ) { tasksForDay, goals ->
                 val filter: (List<PriorityTask>) -> List<PriorityTask> = { list ->
                     if (showDone) list else list.filter { !it.isDone }
                 }
                 val sortedDay = filter(tasksForDay).sortedWith(compareTasks())
-                val filteredByDay = byDay.mapValues { (_, v) -> filter(v).sortedWith(compareTasks()) }
                 val allDoneHidden = !showDone && tasksForDay.isNotEmpty() && sortedDay.isEmpty()
                 TasksUiState(
                     displayMode = mode,
                     listDate = date,
-                    weekDays = weekDays,
                     tasks = sortedDay,
-                    tasksByDay = filteredByDay,
                     prioritySections = buildPrioritySections(sortedDay),
                     activeGoals = goals,
                     showCompletedTasks = showDone,
@@ -161,10 +134,6 @@ class TasksViewModel @Inject constructor(
 
     fun setShowCompletedTasks(show: Boolean) {
         showCompletedTasks.value = show
-    }
-
-    fun shiftSelectedWeek(weeks: Long) {
-        listDate.value = listDate.value.plusWeeks(weeks)
     }
 
     fun addTask(

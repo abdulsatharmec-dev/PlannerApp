@@ -14,9 +14,11 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Schedule
 
 sealed class Screen(val route: String, val label: String, val icon: ImageVector) {
-    object Today   : Screen("today",    "Timeline", Icons.Default.Home)
+    object Today   : Screen("today",    "Home",     Icons.Default.Home)
+    object Schedule: Screen("schedule", "Schedule", Icons.Default.Schedule)
     object Tasks   : Screen("tasks",    "Tasks",    Icons.Default.List)
     object Habits  : Screen("habits",   "Habits",   Icons.Default.TrackChanges)
     object Goals   : Screen("goals",    "Goals",    Icons.Default.CheckCircle)
@@ -29,7 +31,7 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
     object PhoneUsage : Screen("phone_usage", "Phone usage", Icons.Default.PhoneAndroid)
 }
 
-val bottomNavItems = listOf(Screen.Today, Screen.Tasks, Screen.Habits, Screen.Goals, Screen.Chat)
+val bottomNavItems = listOf(Screen.Today, Screen.Schedule, Screen.Tasks, Screen.Habits, Screen.Chat)
 
 const val JOURNAL_EDITOR_ROUTE = "journal_editor/{entryId}"
 

@@ -8,7 +8,7 @@ import com.dailycurator.data.local.entity.HabitLogEntity
 import com.dailycurator.data.model.Habit
 import com.dailycurator.data.model.HabitType
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.UUID
@@ -16,6 +16,48 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private val DATE_FMT = DateTimeFormatter.ISO_LOCAL_DATE
+
+private fun seriesKey(entity: HabitEntity): String =
+    entity.seriesId.trim().ifBlank { entity.id.toString() }
+
+private fun latestPerSeries(entities: List<HabitEntity>): List<HabitEntity> {
+    if (entities.isEmpty()) return emptyList()
+    return entities
+        .groupBy { seriesKey(it) }
+        .values
+        .map { group ->
+            group.maxWith(
+                compareBy<HabitEntity> { LocalDate.parse(it.date, DATE_FMT) }
+                    .thenBy { it.id },
+            )
+        }
+        .sortedBy { it.name.lowercase() }
+}
+
+private fun mergeHabitsForDate(
+    date: LocalDate,
+    all: List<HabitEntity>,
+    dayLogs: List<HabitLogEntity>,
+): List<Habit> {
+    val latest = latestPerSeries(all)
+    val logBySeries = dayLogs.associateBy { it.habitSeriesId }
+    return latest.map { e ->
+        val template = e.toHabit()
+        val sid = seriesKey(e)
+        val log = logBySeries[sid]
+        val cv = log?.valueCompleted ?: 0f
+        val isDone = when (template.habitType) {
+            HabitType.BUILDING -> log != null && cv >= template.targetValue - 1e-3f
+            HabitType.ELIMINATING -> log != null
+        }
+        template.copy(
+            date = date,
+            currentValue = cv,
+            isDone = isDone,
+            doneNote = log?.note,
+        )
+    }
+}
 
 private fun HabitEntity.toHabit() = Habit(
     id = id,
@@ -60,10 +102,12 @@ class HabitRepository @Inject constructor(
     private val dao: HabitDao,
     private val logDao: HabitLogDao,
 ) {
-    fun getHabitsForDate(date: LocalDate): Flow<List<Habit>> =
-        dao.getHabitsForDate(date.format(DATE_FMT)).map { list ->
-            list.map { it.toHabit() }
-        }
+    fun getHabitsForDate(date: LocalDate): Flow<List<Habit>> = combine(
+        dao.observeAll(),
+        logDao.observeLogsForDay(date.format(DATE_FMT)),
+    ) { all, logs ->
+        mergeHabitsForDate(date, all, logs)
+    }
 
     suspend fun getById(id: Long): Habit? = dao.getById(id)?.toHabit()
 
@@ -75,7 +119,25 @@ class HabitRepository @Inject constructor(
         return dao.insert(habit.copy(seriesId = sid).toEntity())
     }
 
-    suspend fun update(habit: Habit) = dao.update(habit.toEntity())
+    suspend fun update(habit: Habit) {
+        val sid = resolveSeriesId(habit)
+        val rows = dao.getAllForSeries(sid)
+        val targets = rows.ifEmpty { listOfNotNull(dao.getById(habit.id)) }
+        for (entity in targets) {
+            dao.update(
+                entity.copy(
+                    name = habit.name,
+                    category = habit.category,
+                    habitType = habit.habitType.name,
+                    iconEmoji = habit.iconEmoji,
+                    targetValue = habit.targetValue,
+                    unit = habit.unit,
+                    trigger = habit.trigger,
+                    frequency = habit.frequency,
+                ),
+            )
+        }
+    }
 
     suspend fun delete(habit: Habit) = dao.delete(habit.toEntity())
 
@@ -88,10 +150,12 @@ class HabitRepository @Inject constructor(
     suspend fun markHabitDone(habit: Habit, note: String?) {
         val sid = resolveSeriesId(habit)
         val dayKey = habit.date.format(DATE_FMT)
-        val valueCompleted = if (habit.habitType == HabitType.BUILDING) {
-            habit.targetValue
+        val templateEntity = resolveTemplateEntity(habit) ?: return
+        val template = templateEntity.toHabit()
+        val valueCompleted = if (template.habitType == HabitType.BUILDING) {
+            template.targetValue
         } else {
-            habit.currentValue.coerceAtMost(habit.targetValue)
+            habit.currentValue.coerceAtMost(template.targetValue)
         }
         logDao.insert(
             HabitLogEntity(
@@ -102,14 +166,18 @@ class HabitRepository @Inject constructor(
                 valueCompleted = valueCompleted,
             ),
         )
-        val updated = habit.copy(
-            isDone = true,
-            doneNote = note,
-            currentValue = if (habit.habitType == HabitType.BUILDING) habit.targetValue else habit.currentValue,
-            seriesId = sid,
+        val withStreaks = recalculateStreaks(template, sid)
+        dao.update(
+            templateEntity.copy(
+                streakDays = withStreaks.streakDays,
+                longestStreak = withStreaks.longestStreak,
+            ),
         )
-        val withStreaks = recalculateStreaks(updated, sid)
-        dao.update(withStreaks.toEntity())
+    }
+
+    private suspend fun resolveTemplateEntity(habit: Habit): HabitEntity? {
+        val sid = resolveSeriesId(habit)
+        return dao.getLatestForSeries(sid) ?: dao.getById(habit.id)
     }
 
     suspend fun updateProgress(habit: Habit, newCurrent: Float) {

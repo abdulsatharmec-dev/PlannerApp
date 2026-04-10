@@ -52,6 +52,8 @@ data class JournalEntry(
     val includeInAgentChat: Boolean = true,
     val includeInAssistantInsight: Boolean = true,
     val includeInWeeklyGoalsInsight: Boolean = true,
+    /** Shown in the “every day” (pinned) section regardless of entry date. */
+    val isEvergreen: Boolean = false,
 )
 
 data class WeeklyGoal(

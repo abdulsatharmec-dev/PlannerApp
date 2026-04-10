@@ -5,10 +5,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,14 +16,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -46,10 +48,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.dailycurator.data.model.JournalEntry
+import com.dailycurator.ui.components.PickDateDialog
 import com.dailycurator.ui.theme.backdropShowsThrough
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlin.math.abs
 
 private val dateTimeFmt: DateTimeFormatter =
     DateTimeFormatter.ofPattern("EEE, MMM d · h:mm a").withZone(ZoneId.systemDefault())
@@ -68,8 +73,21 @@ fun JournalsScreen(
     onOpenEntry: (Long) -> Unit,
     viewModel: JournalsViewModel = hiltViewModel(),
 ) {
-    val entries by viewModel.entries.collectAsState()
+    val listRows by viewModel.listRows.collectAsState()
+    val filterDate by viewModel.filterDate.collectAsState()
+    val evergreenOnly by viewModel.evergreenOnly.collectAsState()
     var pendingDelete by remember { mutableStateOf<JournalEntry?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    PickDateDialog(
+        visible = showDatePicker,
+        initialDate = filterDate ?: LocalDate.now(),
+        onDismiss = { showDatePicker = false },
+        onConfirm = {
+            viewModel.setFilterDate(it)
+            showDatePicker = false
+        },
+    )
 
     pendingDelete?.let { entry ->
         AlertDialog(
@@ -94,6 +112,7 @@ fun JournalsScreen(
     val mid = if (!decorOn) MaterialTheme.colorScheme.background else Color.Transparent
     val topA = if (!decorOn) 0.35f else 0.22f
     val botA = if (!decorOn) 0.2f else 0.12f
+    val dayFilterLabel = filterDate?.format(DateTimeFormatter.ofPattern("MMM d"))
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -130,13 +149,54 @@ fun JournalsScreen(
                     ),
                 )
                 Text(
-                    "Capture thoughts in full screen — tap an entry to keep writing.",
+                    "Group by day, filter by date, or pin entries so they stay visible every day.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FilterChip(
+                        selected = filterDate == null && !evergreenOnly,
+                        onClick = { viewModel.clearFilters() },
+                        label = { Text("All") },
+                    )
+                    FilterChip(
+                        selected = evergreenOnly,
+                        onClick = {
+                            if (evergreenOnly) viewModel.clearFilters() else viewModel.setEvergreenOnly(true)
+                        },
+                        label = { Text("Every day") },
+                    )
+                    if (filterDate != null) {
+                        FilterChip(
+                            selected = true,
+                            onClick = { showDatePicker = true },
+                            label = { Text(dayFilterLabel ?: "Date") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.CalendarMonth,
+                                    contentDescription = null,
+                                    modifier = Modifier.height(18.dp),
+                                )
+                            },
+                        )
+                    } else {
+                        IconButton(onClick = { showDatePicker = true }) {
+                            Icon(
+                                Icons.Default.CalendarMonth,
+                                contentDescription = "Filter by date",
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
             }
-            if (entries.isEmpty()) {
+            if (listRows.isEmpty()) {
                 item {
                     Card(
                         shape = RoundedCornerShape(20.dp),
@@ -146,7 +206,11 @@ fun JournalsScreen(
                         elevation = CardDefaults.cardElevation(0.dp),
                     ) {
                         Text(
-                            "Your pages are empty. Tap the + button to open a fresh diary page.",
+                            when {
+                                evergreenOnly -> "No entries are pinned for every day yet. Open an entry and turn on “Every day”, or tap the tag on a card."
+                                filterDate != null -> "Nothing written on this date."
+                                else -> "Your pages are empty. Tap + to start."
+                            },
                             modifier = Modifier.padding(20.dp),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -154,13 +218,38 @@ fun JournalsScreen(
                     }
                 }
             }
-            itemsIndexed(entries, key = { _, e -> e.id }) { index, entry ->
-                JournalListCard(
-                    entry = entry,
-                    stripeColors = diaryAccentStripes[index % diaryAccentStripes.size],
-                    onClick = { onOpenEntry(entry.id) },
-                    onDelete = { pendingDelete = entry },
-                )
+            items(
+                listRows,
+                key = { row ->
+                    when (row) {
+                        is JournalListRow.SectionHeader -> "h:${row.title}"
+                        is JournalListRow.EntryRow -> row.entry.id
+                    }
+                },
+            ) { row ->
+                when (row) {
+                    is JournalListRow.SectionHeader -> {
+                        Text(
+                            row.title.uppercase(),
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                letterSpacing = 1.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary,
+                            ),
+                            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                        )
+                    }
+                    is JournalListRow.EntryRow -> {
+                        val stripeIndex = (abs(row.entry.id) % diaryAccentStripes.size).toInt()
+                        JournalListCard(
+                            entry = row.entry,
+                            stripeColors = diaryAccentStripes[stripeIndex],
+                            onClick = { onOpenEntry(row.entry.id) },
+                            onDelete = { pendingDelete = row.entry },
+                            onToggleEvergreen = { viewModel.toggleEvergreen(row.entry) },
+                        )
+                    }
+                }
             }
         }
         FloatingActionButton(
@@ -183,11 +272,10 @@ private fun JournalListCard(
     stripeColors: List<Color>,
     onClick: () -> Unit,
     onDelete: () -> Unit,
+    onToggleEvergreen: () -> Unit,
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
@@ -213,29 +301,41 @@ private fun JournalListCard(
                 verticalAlignment = Alignment.Top,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        entry.title,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        dateTimeFmt.format(Instant.ofEpochMilli(entry.updatedAtEpochMillis)),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    if (entry.body.isNotBlank()) {
-                        Spacer(Modifier.height(10.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onClick),
+                    ) {
                         Text(
-                            entry.body,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 4,
+                            entry.title,
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            dateTimeFmt.format(Instant.ofEpochMilli(entry.updatedAtEpochMillis)),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        if (entry.body.isNotBlank()) {
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                entry.body,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 4,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
+                    Spacer(Modifier.height(8.dp))
+                    FilterChip(
+                        selected = entry.isEvergreen,
+                        onClick = onToggleEvergreen,
+                        label = { Text("Every day") },
+                    )
                 }
                 IconButton(onClick = onDelete) {
                     Icon(

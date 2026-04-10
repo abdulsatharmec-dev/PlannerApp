@@ -76,12 +76,14 @@ fun PickDateDialog(
     visible: Boolean,
     initialDate: LocalDate,
     onDismiss: () -> Unit,
-    onConfirm: (LocalDate) -> Unit
+    onConfirm: (LocalDate) -> Unit,
+    /** When false, uses the compact text-field layout (user must switch to calendar). Default is calendar first. */
+    useFullCalendarLayout: Boolean = true,
 ) {
     if (!visible) return
     val state = rememberDatePickerState(
         initialSelectedDateMillis = localDateToMillis(initialDate),
-        initialDisplayMode = DisplayMode.Input,
+        initialDisplayMode = if (useFullCalendarLayout) DisplayMode.Picker else DisplayMode.Input,
     )
     DatePickerDialog(
         onDismissRequest = onDismiss,
@@ -96,7 +98,10 @@ fun PickDateDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     ) {
-        DatePicker(state = state)
+        DatePicker(
+            state = state,
+            showModeToggle = !useFullCalendarLayout,
+        )
     }
 }
 

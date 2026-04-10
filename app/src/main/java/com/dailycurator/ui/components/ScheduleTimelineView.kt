@@ -8,17 +8,20 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -33,11 +36,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dailycurator.data.model.ScheduleEvent
@@ -50,7 +59,8 @@ import java.time.temporal.ChronoUnit
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-private val TimelineViewportHeight = 400.dp
+/** Default height when not embedded in a full-screen schedule page. */
+val DefaultScheduleTimelineViewportHeight = 400.dp
 /** Taller scale (~Google Calendar day view) so short blocks still fit a readable title. */
 private const val BaseHourDp = 100f
 private const val LaneStackGapDp = 3f
@@ -65,27 +75,38 @@ private val TrackEdgeInsetMulti = 6.dp
 private val TrackLaneSpacing = 6.dp
 /** When overlaps require scrolling, each lane is at least this wide. */
 private val TrackMinLaneWidth = 104.dp
-private val BaseDpPerMinute: Float get() = BaseHourDp / 60f
 
-private fun minutesOfDay(t: LocalTime): Int = t.hour * 60 + t.minute
+private val DpPerMinute: Float get() = BaseHourDp / 60f
 
 private fun minutesOfDayFloat(t: LocalTime): Float =
     t.hour * 60f + t.minute + t.second / 60f
 
-private fun floorToHour(t: LocalTime): LocalTime =
-    t.withMinute(0).withSecond(0).withNano(0)
+/**
+ * Minutes from midnight on the same notional calendar day. Used so hour iteration never wraps
+ * past midnight (LocalTime.plusHours from 23:00 → 00:00 would break `while (t.isBefore(end))`).
+ */
+private fun minuteOfDayClock(t: LocalTime): Int =
+    (t.hour * 60 + t.minute).coerceIn(0, 24 * 60 - 1)
+
+private fun localTimeFromMinuteOfDay(m: Int): LocalTime {
+    val mm = m.coerceIn(0, 24 * 60 - 1)
+    return LocalTime.of(mm / 60, mm % 60)
+}
 
 private fun minTime(a: LocalTime, b: LocalTime): LocalTime = if (a.isBefore(b)) a else b
 
 private fun maxTime(a: LocalTime, b: LocalTime): LocalTime = if (a.isBefore(b)) b else a
 
 fun hourTickTimes(windowStart: LocalTime, windowEnd: LocalTime): List<LocalTime> {
-    var t = windowStart.withMinute(0).withSecond(0).withNano(0)
-    if (t.isBefore(windowStart)) t = t.plusHours(1)
+    val startMin = minuteOfDayClock(windowStart)
+    val endMin = minuteOfDayClock(windowEnd)
+    if (endMin <= startMin) return emptyList()
     val out = mutableListOf<LocalTime>()
-    while (!t.isAfter(windowEnd)) {
-        out.add(t)
-        t = t.plusHours(1)
+    var tickMin = (startMin / 60) * 60
+    if (tickMin < startMin) tickMin += 60
+    while (tickMin <= endMin) {
+        out.add(localTimeFromMinuteOfDay(tickMin))
+        tickMin += 60
     }
     return out
 }
@@ -125,21 +146,25 @@ private fun buildTimelineSlices(
     windowStart: LocalTime,
     windowEnd: LocalTime,
     events: List<ScheduleEvent>,
+    dpPerMinute: Float,
 ): List<TimelineSlice> {
     val out = mutableListOf<TimelineSlice>()
-    var t = floorToHour(windowStart)
-    while (t.isBefore(windowEnd)) {
-        val segStart = maxTime(t, windowStart)
-        val segEnd = minTime(t.plusHours(1), windowEnd)
+    val startMin = minuteOfDayClock(windowStart)
+    val endMin = minuteOfDayClock(windowEnd)
+    if (endMin <= startMin) return emptyList()
+    var hourStartMin = (startMin / 60) * 60
+    while (hourStartMin < endMin) {
+        val segStart = localTimeFromMinuteOfDay(maxOf(startMin, hourStartMin))
+        val segEnd = localTimeFromMinuteOfDay(minOf(endMin, hourStartMin + 60))
         val mins = ChronoUnit.MINUTES.between(segStart, segEnd)
         if (mins > 0) {
             val n = countTasksOverlappingSlice(events, segStart, segEnd, windowStart, windowEnd)
             // Fixed scale per minute: hour bands never stretch when more tasks overlap that hour;
             // overlaps use horizontal lanes + min card height instead.
-            val h = BaseDpPerMinute * mins
+            val h = dpPerMinute * mins
             out.add(TimelineSlice(segStart, segEnd, h, n))
         }
-        t = t.plusHours(1)
+        hourStartMin += 60
     }
     var acc = 0f
     for (s in out) {
@@ -299,22 +324,24 @@ fun ScheduleTimelineView(
     /** When false, hides “now” marker and scroll-to-now (e.g. browsing another day). */
     showNowIndicator: Boolean = true,
     scheduleDate: LocalDate = LocalDate.now(),
+    /** Scroll viewport height; use a large value or [Dp.Infinity]-avoiding parent height for full-page schedule. */
+    viewportHeight: Dp = DefaultScheduleTimelineViewportHeight,
 ) {
     val labelFmt = remember { DateTimeFormatter.ofPattern("h:mm a") }
     val minuteFmt = remember { DateTimeFormatter.ofPattern("h:mm") }
-    val startM = minutesOfDay(windowStart)
-    val endM = minutesOfDay(windowEnd)
 
     var now by remember { mutableStateOf(LocalTime.now()) }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(showNowIndicator) {
+        now = LocalTime.now()
+        val interval = if (showNowIndicator) 30_000L else 120_000L
         while (true) {
-            delay(30_000L)
+            delay(interval)
             now = LocalTime.now()
         }
     }
 
     val slices = remember(windowStart, windowEnd, events) {
-        buildTimelineSlices(windowStart, windowEnd, events)
+        buildTimelineSlices(windowStart, windowEnd, events, DpPerMinute)
     }
     val totalHeightInner = remember(slices) {
         slices.sumOf { it.heightDp.toDouble() }.toFloat()
@@ -336,41 +363,70 @@ fun ScheduleTimelineView(
 
     val hourTicks = remember(windowStart, windowEnd) { hourTickTimes(windowStart, windowEnd) }
     val density = LocalDensity.current
-    val scrollState = rememberScrollState()
+    val scrollState = remember(scheduleDate) { ScrollState(0) }
 
     val nowM = minutesOfDayFloat(now)
-    var didSnapToNow by remember(windowStart, windowEnd, scheduleDate) { mutableStateOf(false) }
-    LaunchedEffect(totalHeightInner, slices.size, windowStart, windowEnd, showNowIndicator, scheduleDate) {
+    val nowInDayWindow =
+        !now.isBefore(windowStart) && !now.isAfter(windowEnd)
+
+    var didSnapToNow by remember(windowStart, windowEnd, scheduleDate, showNowIndicator) {
+        mutableStateOf(false)
+    }
+    LaunchedEffect(
+        totalHeightInner,
+        slices.size,
+        windowStart,
+        windowEnd,
+        showNowIndicator,
+        scheduleDate,
+        viewportHeight,
+    ) {
         if (!showNowIndicator || didSnapToNow || slices.isEmpty()) return@LaunchedEffect
-        delay(48)
+        delay(64)
         val maxScroll = scrollState.maxValue
         if (maxScroll <= 0) {
             didSnapToNow = true
             return@LaunchedEffect
         }
-        val nowY = yAtMinute(slices, nowM)
+        val snapNowM = minutesOfDayFloat(LocalTime.now())
+        val nowY = yAtMinute(slices, snapNowM)
         val nowPx = with(density) { nowY.dp.toPx() }.roundToInt()
-        val viewportPx = with(density) { TimelineViewportHeight.toPx() }.roundToInt()
+        val viewportPx = with(density) { viewportHeight.toPx() }.roundToInt()
         val target = (nowPx - viewportPx / 2).coerceIn(0, maxScroll)
-        scrollState.scrollTo(target)
+        val delta = target - scrollState.value
+        if (delta != 0) {
+            scrollState.animateScrollBy(
+                delta.toFloat(),
+                animationSpec = tween(durationMillis = 420, easing = LinearEasing),
+            )
+        }
         didSnapToNow = true
     }
 
-    val pulse = rememberInfiniteTransition(label = "now_line")
-    val pulseAlpha by pulse.animateFloat(
-        initialValue = 0.88f,
-        targetValue = 1f,
+    val nowBandPulse = rememberInfiniteTransition(label = "now_band")
+    val bandGlow by nowBandPulse.animateFloat(
+        initialValue = 0.22f,
+        targetValue = 0.5f,
         animationSpec = infiniteRepeatable(
-            animation = tween(750, easing = LinearEasing),
+            animation = tween(900, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse,
         ),
-        label = "pulse",
+        label = "bandGlow",
+    )
+    val dotPulse by nowBandPulse.animateFloat(
+        initialValue = 0.85f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(550, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "dotPulse",
     )
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .height(TimelineViewportHeight)
+            .height(viewportHeight)
             .verticalScroll(scrollState),
     ) {
         Box(
@@ -378,12 +434,51 @@ fun ScheduleTimelineView(
                 .fillMaxWidth()
                 .height(totalHeightInner.dp),
         ) {
-            Row(Modifier.fillMaxWidth()) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .height(totalHeightInner.dp),
+            ) {
                 Box(
                     Modifier
                         .width(TimelineTimeColumnWidth)
                         .fillMaxHeight(),
                 ) {
+                    val primary = MaterialTheme.colorScheme.primary
+                    if (showNowIndicator && nowInDayWindow && slices.isNotEmpty()) {
+                        val nowYDraw = yAtMinute(slices, nowM)
+                        Canvas(Modifier.fillMaxSize()) {
+                            val yPx = nowYDraw.dp.toPx()
+                            val bandHalf = 44.dp.toPx()
+                            val barW = 5.dp.toPx()
+                            val top = yPx - bandHalf
+                            val h = bandHalf * 2f
+                            drawRoundRect(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        primary.copy(alpha = 0f),
+                                        primary.copy(alpha = bandGlow * 0.95f),
+                                        primary.copy(alpha = 0f),
+                                    ),
+                                    startY = top,
+                                    endY = top + h,
+                                ),
+                                topLeft = Offset(0f, top),
+                                size = Size(barW, h),
+                                cornerRadius = CornerRadius(2.5.dp.toPx(), 2.5.dp.toPx()),
+                            )
+                            drawCircle(
+                                color = NowRed.copy(alpha = dotPulse),
+                                radius = 5.5.dp.toPx(),
+                                center = Offset(barW / 2f, yPx),
+                            )
+                            drawCircle(
+                                color = Color.White.copy(alpha = 0.65f * dotPulse),
+                                radius = 2.5.dp.toPx(),
+                                center = Offset(barW / 2f, yPx),
+                            )
+                        }
+                    }
                     hourTicks.forEach { tick ->
                         val tickM = minutesOfDayFloat(tick)
                         val yPx = yAtMinute(slices, tickM)
@@ -535,45 +630,52 @@ fun ScheduleTimelineView(
                                         .clip(RoundedCornerShape(12.dp)),
                                 )
                             }
-
-                            if (showNowIndicator && nowM >= startM && nowM <= endM) {
-                                val nowY = yAtMinute(slices, nowM)
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .offset(y = (nowY - 5f).dp)
-                                        .alpha(pulseAlpha),
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(10.dp)
-                                            .background(NowRed.copy(alpha = 0.25f), RoundedCornerShape(5.dp)),
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(4.dp)
-                                            .background(NowRed, RoundedCornerShape(2.dp)),
-                                    )
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .offset(x = 6.dp, y = (nowY - 11f).dp)
-                                        .background(NowRed, RoundedCornerShape(4.dp))
-                                        .padding(horizontal = 6.dp, vertical = 3.dp),
-                                ) {
-                                    Text(
-                                        text = "NOW",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 9.sp,
-                                        ),
-                                    )
-                                }
-                            }
                         }
+                    }
+                }
+            }
+
+            if (showNowIndicator && nowInDayWindow && slices.isNotEmpty()) {
+                val nowY = yAtMinute(slices, nowM)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(20f),
+                ) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val yPx = yAtMinute(slices, nowM).dp.toPx()
+                        val w = size.width
+                        val halo = 7.dp.toPx()
+                        val core = 3.5.dp.toPx()
+                        drawLine(
+                            color = Color.Black.copy(alpha = 0.4f),
+                            start = Offset(0f, yPx),
+                            end = Offset(w, yPx),
+                            strokeWidth = halo,
+                            cap = StrokeCap.Round,
+                        )
+                        drawLine(
+                            color = NowRed,
+                            start = Offset(0f, yPx),
+                            end = Offset(w, yPx),
+                            strokeWidth = core,
+                            cap = StrokeCap.Round,
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .offset(x = 4.dp, y = (nowY - 16f).dp)
+                            .background(NowRed, RoundedCornerShape(4.dp))
+                            .padding(horizontal = 7.dp, vertical = 4.dp),
+                    ) {
+                        Text(
+                            text = "NOW",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp,
+                            ),
+                        )
                     }
                 }
             }

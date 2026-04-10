@@ -61,6 +61,7 @@ fun JournalEditorScreen(
     val includeChat by viewModel.includeInAgentChat.collectAsState()
     val includeAssistant by viewModel.includeInAssistantInsight.collectAsState()
     val includeWeekly by viewModel.includeInWeeklyGoalsInsight.collectAsState()
+    val isEvergreenEntry by viewModel.isEvergreen.collectAsState()
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var validationError by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
@@ -245,6 +246,12 @@ fun JournalEditorScreen(
                             focusedContainerColor = paper,
                             unfocusedContainerColor = paper,
                         ),
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    RowSwitchRow(
+                        checked = isEvergreenEntry,
+                        onCheckedChange = { viewModel.setEvergreen(it) },
+                        label = "Show every day (affirmations & reminders)",
                     )
                     Spacer(Modifier.height(12.dp))
                     OutlinedTextField(

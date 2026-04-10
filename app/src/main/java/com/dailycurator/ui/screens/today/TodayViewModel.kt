@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -33,7 +32,6 @@ import javax.inject.Inject
 data class TodayUiState(
     val tasks: List<PriorityTask> = emptyList(),
     val goals: List<WeeklyGoal> = emptyList(),
-    val scheduleEvents: List<ScheduleEvent> = emptyList(),
     val assistantInsight: AiInsight = AiInsight(
         insightText = "Insights will appear here after the first daily generation.",
         boldPart = "Assistant insight",
@@ -43,7 +41,6 @@ data class TodayUiState(
         boldPart = "Weekly focus",
     ),
     val goalsCollapsed: Boolean = false,
-    val scheduleTab: ScheduleTab = ScheduleTab.TIMELINE,
     val assistantInsightEnabled: Boolean = true,
     val weeklyGoalsInsightEnabled: Boolean = true,
     val cerebrasConfigured: Boolean = false,
@@ -51,14 +48,10 @@ data class TodayUiState(
     val weeklyGoalsInsightLoading: Boolean = false,
     val dayWindowStart: LocalTime = LocalTime.of(4, 0),
     val dayWindowEnd: LocalTime = LocalTime.of(22, 0),
-    /** Calendar day shown on the home schedule timeline / clock. */
-    val scheduleTimelineDate: LocalDate = LocalDate.now(),
     val homeGmailSummaryEnabled: Boolean = false,
     /** Condensed markdown/text for the Home card (from cached mailbox summary). */
     val gmailHomeDigestMarkdown: String = "",
 )
-
-enum class ScheduleTab { TIMELINE, CLOCK }
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -89,25 +82,11 @@ class TodayViewModel @Inject constructor(
     private val today = LocalDate.now()
     private val weekStart = today.minusDays(today.dayOfWeek.value.toLong() - 1)
 
-    private val scheduleTimelineDate = MutableStateFlow(LocalDate.now())
-
     init {
         viewModelScope.launch {
-            combine(
-                taskRepo.getTasksForDate(LocalDate.now()),
-                scheduleTimelineDate.flatMapLatest { d ->
-                    taskRepo.getTasksForDate(d).map { d to it }
-                },
-            ) { todayTasks, sdAndTasks ->
-                val (sd, scheduleTasks) = sdAndTasks
-                _uiState.update {
-                    it.copy(
-                        tasks = todayTasks,
-                        scheduleTimelineDate = sd,
-                        scheduleEvents = scheduleTasks.toScheduleEvents(),
-                    )
-                }
-            }.collect { }
+            taskRepo.getTasksForDate(LocalDate.now()).collect { todayTasks ->
+                _uiState.update { it.copy(tasks = todayTasks) }
+            }
         }
         viewModelScope.launch {
             goalRepo.getGoalsForWeek(weekStart).collect { goals ->
@@ -205,11 +184,6 @@ class TodayViewModel @Inject constructor(
         }
     }
     fun toggleGoalsCollapsed() = _uiState.update { it.copy(goalsCollapsed = !it.goalsCollapsed) }
-    fun setScheduleTab(tab: ScheduleTab) = _uiState.update { it.copy(scheduleTab = tab) }
-
-    fun setScheduleTimelineDate(date: LocalDate) {
-        scheduleTimelineDate.value = date
-    }
     fun toggleGoal(goal: WeeklyGoal) = viewModelScope.launch { goalRepo.toggleCompleted(goal) }
 
     fun openGoalDetail(goalId: Long) {
@@ -306,17 +280,5 @@ class TodayViewModel @Inject constructor(
     private fun dayWindowMinutesToLocalTime(minuteOfDay: Int): LocalTime {
         val c = minuteOfDay.coerceIn(0, 24 * 60 - 1)
         return LocalTime.of(c / 60, c % 60)
-    }
-
-    private fun List<PriorityTask>.toScheduleEvents(): List<ScheduleEvent> = map { task ->
-        ScheduleEvent(
-            id = task.id, title = task.title,
-            startTime = task.startTime, endTime = task.endTime,
-            location = task.statusNote,
-            tags = if (task.urgency == Urgency.RED) listOf("HIGH") else if (task.isTopFive) listOf("FOCUS", "HIGH") else emptyList(),
-            priority = if (task.urgency == Urgency.RED) EventPriority.HIGH else EventPriority.MEDIUM,
-            isProtected = task.isTopFive,
-            date = task.date
-        )
     }
 }
