@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.CalendarViewDay
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -72,21 +72,21 @@ fun ScheduleTopAppBar(
                     )
                 }
                 IconButton(
-                    onClick = { viewModel.setScheduleTab(ScheduleTab.CLOCK) },
+                    onClick = { viewModel.setScheduleTab(ScheduleTab.MAP) },
                     colors = IconButtonDefaults.iconButtonColors(
-                        containerColor = if (state.scheduleTab == ScheduleTab.CLOCK) {
+                        containerColor = if (state.scheduleTab == ScheduleTab.MAP) {
                             MaterialTheme.colorScheme.primaryContainer
                         } else {
                             MaterialTheme.colorScheme.surface
                         },
-                        contentColor = if (state.scheduleTab == ScheduleTab.CLOCK) {
+                        contentColor = if (state.scheduleTab == ScheduleTab.MAP) {
                             MaterialTheme.colorScheme.onPrimaryContainer
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         },
                     ),
                 ) {
-                    Icon(Icons.Default.Schedule, contentDescription = "Clock view")
+                    Icon(Icons.Filled.Map, contentDescription = "Map view")
                 }
                 IconButton(onClick = onNavigateSettings) {
                     Icon(

@@ -19,6 +19,12 @@ data class TaskEntity(
     val isMustDo: Boolean = false,
     val displayNumber: Int = 0,
     @ColumnInfo(index = true) val goalId: Long? = null,
+    /** Shared id for tasks created from one repeating add/edit; null = standalone. */
+    @ColumnInfo(index = true) val repeatSeriesId: String? = null,
+    val repeatOption: String = "NONE",
+    val customRepeatIntervalDays: Int = 3,
+    /** Last calendar day to include for this repeat (ISO date); null = use built-in max span only. */
+    val repeatUntilDate: String? = null,
     val date: String,
     val tags: String = "[]",
     val location: String? = null,

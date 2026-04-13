@@ -32,7 +32,7 @@ data class ScheduleUiState(
     val scheduleTimelineDate: LocalDate = LocalDate.now(),
 )
 
-enum class ScheduleTab { TIMELINE, CLOCK }
+enum class ScheduleTab { TIMELINE, MAP }
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel

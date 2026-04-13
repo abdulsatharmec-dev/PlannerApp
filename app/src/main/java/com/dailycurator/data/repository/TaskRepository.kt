@@ -3,6 +3,7 @@ package com.dailycurator.data.repository
 import com.dailycurator.data.local.dao.TaskDao
 import com.dailycurator.data.local.entity.TaskEntity
 import com.dailycurator.data.model.PriorityTask
+import com.dailycurator.data.model.TaskRepeatOption
 import com.dailycurator.data.model.Urgency
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -19,6 +20,15 @@ private val TIME_FMT = DateTimeFormatter.ofPattern("HH:mm")
 private fun String.toLocalTime() = LocalTime.parse(this, TIME_FMT)
 private fun String.toLocalDate() = LocalDate.parse(this, DATE_FMT)
 
+private fun String?.toLocalDateOrNull(): LocalDate? =
+    this?.takeIf { it.isNotBlank() }?.runCatching { toLocalDate() }?.getOrNull()
+
+private fun String.toTaskRepeatOption(): TaskRepeatOption = try {
+    TaskRepeatOption.valueOf(this)
+} catch (_: IllegalArgumentException) {
+    TaskRepeatOption.NONE
+}
+
 private fun TaskEntity.toPriorityTask() = PriorityTask(
     id = id, rank = rank, title = title,
     startTime = startTime.toLocalTime(),
@@ -26,7 +36,36 @@ private fun TaskEntity.toPriorityTask() = PriorityTask(
     dueInfo = dueInfo, statusNote = statusNote,
     urgency = Urgency.valueOf(urgency),
     isDone = isDone, isTopFive = isTopFive, isMustDo = isMustDo, displayNumber = displayNumber,
-    goalId = goalId, date = date.toLocalDate(),
+    goalId = goalId,
+    repeatSeriesId = repeatSeriesId,
+    repeatOption = repeatOption.toTaskRepeatOption(),
+    customRepeatIntervalDays = customRepeatIntervalDays,
+    repeatUntilDate = repeatUntilDate.toLocalDateOrNull(),
+    date = date.toLocalDate(),
+)
+
+private fun PriorityTask.toEntity() = TaskEntity(
+    id = id,
+    rank = rank,
+    title = title,
+    startTime = startTime.format(TIME_FMT),
+    endTime = endTime.format(TIME_FMT),
+    dueInfo = dueInfo,
+    statusNote = statusNote,
+    urgency = urgency.name,
+    isDone = isDone,
+    isTopFive = isTopFive,
+    isMustDo = isMustDo,
+    displayNumber = displayNumber,
+    goalId = goalId,
+    repeatSeriesId = repeatSeriesId,
+    repeatOption = repeatOption.name,
+    customRepeatIntervalDays = customRepeatIntervalDays,
+    repeatUntilDate = repeatUntilDate?.format(DATE_FMT),
+    date = date.format(DATE_FMT),
+    tags = "[]",
+    location = null,
+    isProtected = false,
 )
 
 @Singleton
@@ -43,6 +82,20 @@ class TaskRepository @Inject constructor(private val dao: TaskDao) {
 
     suspend fun getById(id: Long): PriorityTask? = dao.getById(id)?.toPriorityTask()
 
+    suspend fun getTasksByRepeatSeriesId(seriesId: String): List<PriorityTask> =
+        dao.getTasksByRepeatSeriesId(seriesId).map { it.toPriorityTask() }
+
+    /**
+     * Tasks created before repeatSeriesId, with the same title and times (and goal) on other days.
+     */
+    suspend fun findLegacyRepeatSiblings(task: PriorityTask): List<PriorityTask> =
+        dao.getTasksByLegacyRepeatFingerprint(
+            title = task.title,
+            startTime = task.startTime.format(TIME_FMT),
+            endTime = task.endTime.format(TIME_FMT),
+        ).map { it.toPriorityTask() }
+            .filter { it.goalId == task.goalId }
+
     fun getTasksForGoal(goalId: Long): Flow<List<PriorityTask>> =
         dao.getTasksForGoal(goalId).map { list -> list.map { it.toPriorityTask() } }
 
@@ -53,35 +106,11 @@ class TaskRepository @Inject constructor(private val dao: TaskDao) {
 
     suspend fun toggleDone(task: PriorityTask) = dao.setDone(task.id, !task.isDone)
 
-    suspend fun insert(task: PriorityTask): Long = dao.insert(
-        TaskEntity(id = task.id, rank = task.rank, title = task.title,
-            startTime = task.startTime.format(TIME_FMT),
-            endTime = task.endTime.format(TIME_FMT),
-            dueInfo = task.dueInfo, statusNote = task.statusNote,
-            urgency = task.urgency.name, isDone = task.isDone, isTopFive = task.isTopFive, isMustDo = task.isMustDo,
-            displayNumber = task.displayNumber, goalId = task.goalId,
-            date = task.date.format(DATE_FMT))
-    )
+    suspend fun insert(task: PriorityTask): Long = dao.insert(task.toEntity())
 
-    suspend fun update(task: PriorityTask) = dao.update(
-        TaskEntity(id = task.id, rank = task.rank, title = task.title,
-            startTime = task.startTime.format(TIME_FMT),
-            endTime = task.endTime.format(TIME_FMT),
-            dueInfo = task.dueInfo, statusNote = task.statusNote,
-            urgency = task.urgency.name, isDone = task.isDone, isTopFive = task.isTopFive, isMustDo = task.isMustDo,
-            displayNumber = task.displayNumber, goalId = task.goalId,
-            date = task.date.format(DATE_FMT))
-    )
+    suspend fun update(task: PriorityTask) = dao.update(task.toEntity())
 
-    suspend fun delete(task: PriorityTask) = dao.delete(
-        TaskEntity(id = task.id, rank = task.rank, title = task.title,
-            startTime = task.startTime.format(TIME_FMT),
-            endTime = task.endTime.format(TIME_FMT),
-            dueInfo = task.dueInfo, statusNote = task.statusNote,
-            urgency = task.urgency.name, isDone = task.isDone, isTopFive = task.isTopFive, isMustDo = task.isMustDo,
-            displayNumber = task.displayNumber, goalId = task.goalId,
-            date = task.date.format(DATE_FMT))
-    )
+    suspend fun delete(task: PriorityTask) = dao.delete(task.toEntity())
 
     suspend fun getUndoneTasks(): List<PriorityTask> =
         dao.getUndoneTasks().map { it.toPriorityTask() }

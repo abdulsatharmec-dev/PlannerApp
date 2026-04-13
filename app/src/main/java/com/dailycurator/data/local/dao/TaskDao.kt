@@ -39,4 +39,21 @@ interface TaskDao {
 
     @Query("UPDATE tasks SET goalId = NULL WHERE goalId = :goalId")
     suspend fun clearGoalLinks(goalId: Long)
+
+    @Query("SELECT * FROM tasks WHERE repeatSeriesId = :seriesId ORDER BY date ASC, rank ASC")
+    suspend fun getTasksByRepeatSeriesId(seriesId: String): List<TaskEntity>
+
+    /** Older repeats: rows with null repeatSeriesId sharing title + start/end times. */
+    @Query(
+        """
+        SELECT * FROM tasks WHERE repeatSeriesId IS NULL
+        AND title = :title AND startTime = :startTime AND endTime = :endTime
+        ORDER BY date ASC, id ASC
+        """,
+    )
+    suspend fun getTasksByLegacyRepeatFingerprint(
+        title: String,
+        startTime: String,
+        endTime: String,
+    ): List<TaskEntity>
 }

@@ -28,6 +28,12 @@ data class PriorityTask(
     val displayNumber: Int = 0,
     /** Optional link to a weekly goal (display-only from Goals). */
     val goalId: Long? = null,
+    /** Tasks created together from repeat share this id; null if not part of a series. */
+    val repeatSeriesId: String? = null,
+    val repeatOption: TaskRepeatOption = TaskRepeatOption.NONE,
+    val customRepeatIntervalDays: Int = 3,
+    /** Inclusive end date for repeating tasks; null means repeat for the default generated window only. */
+    val repeatUntilDate: LocalDate? = null,
     val date: LocalDate = LocalDate.now()
 )
 

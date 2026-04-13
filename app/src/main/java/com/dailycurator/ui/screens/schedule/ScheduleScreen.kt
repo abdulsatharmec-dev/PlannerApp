@@ -17,7 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.dailycurator.ui.components.ClockView
+import com.dailycurator.ui.components.ScheduleMomentumMapView
 import com.dailycurator.ui.components.DefaultScheduleTimelineViewportHeight
 import com.dailycurator.ui.components.PickDateDialog
 import com.dailycurator.ui.components.ScheduleTimelineView
@@ -79,9 +79,10 @@ fun ScheduleScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-            ScheduleTab.CLOCK -> {
-                ClockView(
+            ScheduleTab.MAP -> {
+                ScheduleMomentumMapView(
                     events = state.scheduleEvents,
+                    scheduleDate = state.scheduleTimelineDate,
                     windowStart = state.dayWindowStart,
                     windowEnd = state.dayWindowEnd,
                     useLiveNowIndicator = scheduleShowsToday,
