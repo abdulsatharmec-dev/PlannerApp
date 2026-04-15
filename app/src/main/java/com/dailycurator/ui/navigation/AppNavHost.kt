@@ -33,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -58,15 +59,24 @@ import com.dailycurator.ui.screens.settings.SettingsScreen
 import com.dailycurator.ui.screens.tasks.TasksScreen
 import com.dailycurator.ui.screens.today.TodayScreen
 import com.dailycurator.ui.theme.appScaffoldContainerColor
+import com.dailycurator.R
 import kotlinx.coroutines.launch
 
 private fun subPageTitle(route: String?): String? = when (route) {
     Screen.Settings.route -> "Settings"
     Screen.Journal.route -> "Journal"
-    Screen.GmailMailboxSummary.route -> "Gmail Mailbox Summary"
-    Screen.AgentMemory.route -> "Memory Management"
+    Screen.GmailMailboxSummary.route -> "Gmail summary"
+    Screen.AgentMemory.route -> "AI memory"
     Screen.PhoneUsage.route -> "Phone usage"
     else -> null
+}
+
+@Composable
+private fun mainScreenTopBarTitle(currentRoute: String?): String {
+    bottomNavItems.find { it.route == currentRoute }?.label?.let { return it }
+    subPageTitle(currentRoute)?.let { return it }
+    val route = currentRoute ?: return stringResource(R.string.app_name)
+    return route.replaceFirstChar { it.uppercaseChar() }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -113,7 +123,7 @@ fun AppNavHost(
             ModalDrawerSheet {
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    "DayRoute",
+                    stringResource(R.string.app_name),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp),
                 )
@@ -141,7 +151,7 @@ fun AppNavHost(
                 )
                 NavigationDrawerItem(
                     icon = { Icon(Screen.Journal.icon, contentDescription = null) },
-                    label = { Text("Journaling") },
+                    label = { Text("Journal") },
                     selected = journalDrawerSelected,
                     onClick = {
                         scope.launch { drawerState.close() }
@@ -175,7 +185,7 @@ fun AppNavHost(
                 )
                 NavigationDrawerItem(
                     icon = { Icon(Screen.GmailMailboxSummary.icon, contentDescription = null) },
-                    label = { Text("Gmail Mailbox Summary") },
+                    label = { Text("Gmail summary") },
                     selected = gmailDrawerSelected,
                     onClick = {
                         scope.launch { drawerState.close() }
@@ -190,7 +200,7 @@ fun AppNavHost(
                 )
                 NavigationDrawerItem(
                     icon = { Icon(Screen.AgentMemory.icon, contentDescription = null) },
-                    label = { Text("Memory Management") },
+                    label = { Text("AI memory") },
                     selected = memoryDrawerSelected,
                     onClick = {
                         scope.launch { drawerState.close() }
@@ -283,7 +293,7 @@ fun AppNavHost(
                             CenterAlignedTopAppBar(
                                 title = {
                                     Text(
-                                        currentRoute?.replaceFirstChar { it.uppercase() } ?: "DayRoute",
+                                        mainScreenTopBarTitle(currentRoute),
                                         style = MaterialTheme.typography.titleMedium,
                                     )
                                 },

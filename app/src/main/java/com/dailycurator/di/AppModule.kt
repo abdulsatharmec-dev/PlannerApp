@@ -18,6 +18,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
 @Module
@@ -60,5 +62,13 @@ object AppModule {
     @Provides @Singleton
     fun provideAppPreferences(@ApplicationContext context: Context, gson: Gson): AppPreferences =
         AppPreferences(context, gson)
+
+    @Provides @Singleton
+    fun provideOkHttpClient(): OkHttpClient =
+        OkHttpClient.Builder()
+            .connectTimeout(25, TimeUnit.SECONDS)
+            .readTimeout(45, TimeUnit.SECONDS)
+            .writeTimeout(25, TimeUnit.SECONDS)
+            .build()
 }
 

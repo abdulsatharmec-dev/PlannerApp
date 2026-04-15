@@ -98,7 +98,7 @@ fun PhoneUsageScreen(viewModel: PhoneUsageViewModel = hiltViewModel()) {
         if (!state.hasPermission) {
             item {
                 Text(
-                    "Allow usage access for DayRoute in system settings.",
+                    "Allow usage access for Day Planner in system settings.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(Modifier.height(8.dp))

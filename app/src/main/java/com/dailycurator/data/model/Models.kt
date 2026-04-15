@@ -22,6 +22,8 @@ data class PriorityTask(
     val isTopFive: Boolean = false,
     /** Daily essentials (meals, sleep, etc.) excluded from productive time estimates. */
     val isMustDo: Boolean = false,
+    /** Marked in the task editor or reminder sheet when the task cannot be completed as planned. */
+    val isCantComplete: Boolean = false,
     /**
      * Optional label index shown on the left of the task card. **0** = auto (1, 2, 3… by day order: rank, then start time, then id).
      */
@@ -34,7 +36,9 @@ data class PriorityTask(
     val customRepeatIntervalDays: Int = 3,
     /** Inclusive end date for repeating tasks; null means repeat for the default generated window only. */
     val repeatUntilDate: LocalDate? = null,
-    val date: LocalDate = LocalDate.now()
+    val date: LocalDate = LocalDate.now(),
+    /** Stored as JSON array in the database; e.g. Work, Personal, Prayer. */
+    val tags: List<String> = emptyList(),
 )
 
 data class ScheduleEvent(

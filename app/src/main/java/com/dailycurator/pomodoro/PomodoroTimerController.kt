@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -60,6 +61,34 @@ class PomodoroTimerController @Inject constructor(
             launch = p,
             plannedMinutes = p.plannedMinutes.coerceIn(1, 180),
         )
+    }
+
+    /**
+     * Task reminder "Pomodoro" action (and similar): [PomodoroScreen] is often not resumed when the
+     * shade is used, so [onScreenResume] never consumes the bridge. Apply the launch here and start the timer.
+     * Runs on [scope] (Main) so UI state is ready before the activity is brought to front.
+     */
+    suspend fun applyLaunchFromNotification(request: PomodoroLaunchRequest, autoStart: Boolean) {
+        withContext(scope.coroutineContext) {
+            syncWallClockIfRunning()
+            if (_ui.value.sessionActive) return@withContext
+            _ui.value = PomodoroUiState(
+                launch = request,
+                plannedMinutes = request.plannedMinutes.coerceIn(1, 180),
+            )
+            if (autoStart) {
+                val s = _ui.value
+                if (!s.running) {
+                    if (!s.sessionActive) {
+                        startNewSession()
+                    } else if (s.remainingSeconds != null) {
+                        _ui.value = s.copy(running = true)
+                        startTicks()
+                        refreshNotification()
+                    }
+                }
+            }
+        }
     }
 
     /**

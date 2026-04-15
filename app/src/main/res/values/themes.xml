@@ -1,4 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.DailyCurator" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Main UI theme after cold start (Compose + edge-to-edge). -->
+    <style name="Theme.DailyCurator" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@color/ic_launcher_background</item>
+    </style>
+
+    <!-- Shown instantly on launch; hands off to Theme.DailyCurator when the activity is ready. -->
+    <style name="Theme.DailyCurator.Launcher" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.DailyCurator</item>
+    </style>
 </resources>

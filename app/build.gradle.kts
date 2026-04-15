@@ -68,6 +68,7 @@ kapt {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    implementation("androidx.core:core-splashscreen:1.0.1")
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)
@@ -86,6 +87,7 @@ dependencies {
     implementation(libs.hilt.navigation.compose)
     implementation(libs.gson)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("androidx.biometric:biometric:1.1.0")
     implementation("com.google.android.gms:play-services-auth:21.3.0")
     implementation("ai.koog:koog-agents:0.7.1")
     implementation("ai.koog:agents-core:0.7.1")
@@ -95,6 +97,11 @@ dependencies {
     val markdownRenderer = "0.26.0"
     implementation("com.mikepenz:multiplatform-markdown-renderer:$markdownRenderer")
     implementation("com.mikepenz:multiplatform-markdown-renderer-m3:$markdownRenderer")
+    val media3 = "1.4.1"
+    implementation("androidx.media3:media3-exoplayer:$media3")
+    implementation("androidx.media3:media3-ui:$media3")
+    implementation("com.pierfrancescosoffritti.androidyoutubeplayer:core:12.1.0")
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation(kotlin("test"))
     debugImplementation(libs.androidx.ui.tooling)

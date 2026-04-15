@@ -1,9 +1,13 @@
 package com.dailycurator.ui.screens.tasks
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,6 +20,7 @@ import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -55,6 +60,7 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -66,6 +72,8 @@ import com.dailycurator.data.model.TaskRepeatOption
 import com.dailycurator.data.model.Urgency
 import com.dailycurator.data.model.WeeklyGoal
 import com.dailycurator.ui.components.DurationPresetSelector
+import com.dailycurator.ui.components.TaskTagChip
+import com.dailycurator.ui.components.TaskTagUi
 import com.dailycurator.ui.components.PickDateDialog
 import com.dailycurator.ui.components.PickTimeDialog
 import com.dailycurator.ui.components.PriorityItem
@@ -184,6 +192,7 @@ fun TasksScreen(
             task = taskToEdit,
             defaultListDate = state.listDate,
             activeGoals = state.activeGoals,
+            taskTagColors = state.taskTagColors,
             repeatDefaultUntil = { anchor, repeat, customDays ->
                 viewModel.suggestedRepeatUntil(anchor, repeat, customDays)
             },
@@ -191,11 +200,31 @@ fun TasksScreen(
                 showAddDialog = false
                 taskToEdit = null
             },
-            onConfirm = { title, date, start, end, urgency, isTop5, isMustDo, displayNumber, note, goalId, repeat, customRepeatDays, repeatUntil ->
+            onEnsureDefaultTagColor = { viewModel.ensureDefaultTaskTagColor(it) },
+            onTaskTagColorPicked = { name, argb -> viewModel.setTaskTagColor(name, argb) },
+            onMarkWontDo = if (taskToEdit != null && taskToEdit!!.id > 0L) {
+                {
+                    viewModel.markTaskWontDo(taskToEdit!!)
+                    showAddDialog = false
+                    taskToEdit = null
+                }
+            } else {
+                null
+            },
+            onClearWontDo = if (taskToEdit != null && taskToEdit!!.id > 0L) {
+                {
+                    viewModel.clearTaskWontDo(taskToEdit!!)
+                    showAddDialog = false
+                    taskToEdit = null
+                }
+            } else {
+                null
+            },
+            onConfirm = { title, date, start, end, urgency, isTop5, isMustDo, isCantComplete, displayNumber, note, goalId, repeat, customRepeatDays, repeatUntil, tags ->
                 if (taskToEdit == null) {
                     viewModel.addTask(
-                        title, date, start, end, urgency, isTop5, isMustDo, displayNumber, note, goalId,
-                        repeat, customRepeatDays, repeatUntil,
+                        title, date, start, end, urgency, isTop5, isMustDo, isCantComplete, displayNumber, note, goalId,
+                        repeat, customRepeatDays, repeatUntil, tags,
                     )
                 } else {
                     viewModel.updateTask(
@@ -207,12 +236,14 @@ fun TasksScreen(
                         urgency,
                         isTop5,
                         isMustDo,
+                        isCantComplete,
                         displayNumber,
                         note,
                         goalId,
                         repeat,
                         customRepeatDays,
                         repeatUntil,
+                        tags,
                     )
                 }
                 showAddDialog = false
@@ -325,6 +356,19 @@ fun TasksScreen(
                                 )
                             },
                         )
+                        DropdownMenuItem(
+                            text = { Text("Show won't do") },
+                            onClick = {
+                                viewModel.setShowWontDoTasks(!state.showWontDoTasks)
+                            },
+                            trailingIcon = {
+                                Switch(
+                                    checked = state.showWontDoTasks,
+                                    onCheckedChange = null,
+                                    enabled = false,
+                                )
+                            },
+                        )
                     }
                 }
                 IconButton(onClick = onNavigateSettings) {
@@ -357,6 +401,7 @@ fun TasksScreen(
                             EmptyTasksHint(
                                 allTasksDoneHidden = state.allTasksDoneHidden,
                                 allMustDoHidden = state.allMustDoHidden,
+                                allWontDoHidden = state.allWontDoHidden,
                                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
                             )
                         }
@@ -366,6 +411,7 @@ fun TasksScreen(
                                 task = task,
                                 listNumber = resolvedTaskListNumber(task, orderedDayTasks),
                                 viewModel = viewModel,
+                                taskTagColors = state.taskTagColors,
                                 onEdit = { taskToEdit = task },
                                 onRequestDelete = {
                                     coroutineScope.launch {
@@ -394,6 +440,7 @@ fun TasksScreen(
                             EmptyTasksHint(
                                 allTasksDoneHidden = state.allTasksDoneHidden,
                                 allMustDoHidden = state.allMustDoHidden,
+                                allWontDoHidden = state.allWontDoHidden,
                                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
                             )
                         }
@@ -415,6 +462,7 @@ fun TasksScreen(
                                     task = task,
                                     listNumber = resolvedTaskListNumber(task, orderedDayTasks),
                                     viewModel = viewModel,
+                                    taskTagColors = state.taskTagColors,
                                     onEdit = { taskToEdit = task },
                                     onRequestDelete = {
                                     coroutineScope.launch {
@@ -498,12 +546,21 @@ private fun TasksViewModeToggle(
 private fun EmptyTasksHint(
     allTasksDoneHidden: Boolean,
     allMustDoHidden: Boolean,
+    allWontDoHidden: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Text(
         when {
+            allTasksDoneHidden && allMustDoHidden && allWontDoHidden ->
+                "Nothing to show with current filters. Open the ⋮ menu to adjust Show completed, Show must-do, and Show won't do."
             allTasksDoneHidden && allMustDoHidden ->
                 "Nothing to show with current filters. Open the ⋮ menu to turn on Show completed and Show must-do."
+            allTasksDoneHidden && allWontDoHidden ->
+                "Nothing to show with current filters. Open the ⋮ menu to turn on Show completed and Show won't do."
+            allMustDoHidden && allWontDoHidden ->
+                "Nothing to show with current filters. Open the ⋮ menu to turn on Show must-do and Show won't do."
+            allWontDoHidden ->
+                "Only “won’t do” tasks are left for this day. Open the ⋮ menu and turn on Show won't do to see them."
             allTasksDoneHidden ->
                 "Everything here is done. Open the ⋮ menu and turn on Show completed to see checked-off tasks."
             allMustDoHidden ->
@@ -522,6 +579,7 @@ private fun TaskRow(
     task: PriorityTask,
     listNumber: Int,
     viewModel: TasksViewModel,
+    taskTagColors: Map<String, Int>,
     onEdit: () -> Unit,
     onRequestDelete: () -> Unit,
     onStartPomodoro: () -> Unit,
@@ -538,6 +596,7 @@ private fun TaskRow(
             task = task,
             listNumber = listNumber,
             onToggleDone = { viewModel.toggleTaskDone(task) },
+            taskTagColors = taskTagColors,
             onStartPomodoro = if (task.id > 0L) onStartPomodoro else null,
             modifier = Modifier
                 .weight(1f)
@@ -571,15 +630,20 @@ private fun TaskRow(
     Spacer(Modifier.height(2.dp))
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun ManageTaskDialog(
     task: PriorityTask?,
     defaultListDate: LocalDate,
     activeGoals: List<WeeklyGoal>,
+    taskTagColors: Map<String, Int>,
     repeatDefaultUntil: (LocalDate, TaskRepeatOption, Int) -> LocalDate,
     onDismiss: () -> Unit,
-    onConfirm: (String, LocalDate, LocalTime, LocalTime, Urgency, Boolean, Boolean, Int, String?, Long?, TaskRepeatOption, Int, LocalDate?) -> Unit,
+    onConfirm: (String, LocalDate, LocalTime, LocalTime, Urgency, Boolean, Boolean, Boolean, Int, String?, Long?, TaskRepeatOption, Int, LocalDate?, List<String>) -> Unit,
+    onEnsureDefaultTagColor: (String) -> Unit,
+    onTaskTagColorPicked: (String, Int) -> Unit,
+    onMarkWontDo: (() -> Unit)? = null,
+    onClearWontDo: (() -> Unit)? = null,
     onStartPomodoro: (() -> Unit)? = null,
 ) {
     var title by remember(task?.id) { mutableStateOf(task?.title ?: "") }
@@ -605,6 +669,10 @@ private fun ManageTaskDialog(
     var urgency by remember(task?.id) { mutableStateOf(task?.urgency ?: Urgency.GREEN) }
     var isTop5 by remember(task?.id) { mutableStateOf(task?.isTopFive == true) }
     var isMustDo by remember(task?.id) { mutableStateOf(task?.isMustDo == true) }
+    var isCantComplete by remember(task?.id) { mutableStateOf(task?.isCantComplete == true) }
+    var tags by remember(task?.id) { mutableStateOf(task?.tags ?: emptyList()) }
+    var newTagText by remember { mutableStateOf("") }
+    val suggestedTags = remember { listOf("Work", "Personal", "Prayer") }
     var listNumberText by remember(task?.id) {
         mutableStateOf(
             if (task != null && task.displayNumber > 0) task.displayNumber.toString() else "",
@@ -627,6 +695,9 @@ private fun ManageTaskDialog(
         customRepeatDaysText.toIntOrNull()?.coerceIn(2, 30) ?: 3
     val linkedGoalLabel = linkedGoalId?.let { id -> activeGoals.find { it.id == id }?.title } ?: "None"
     var titleError by remember { mutableStateOf(false) }
+    var dialogMenuExpanded by remember { mutableStateOf(false) }
+    var showNewTagColorPicker by remember { mutableStateOf(false) }
+    var pendingNewTagLabel by remember { mutableStateOf("") }
 
     val dialogScroll = rememberScrollState()
     val dialogMaxHeight = (LocalConfiguration.current.screenHeightDp.dp * 0.58f)
@@ -659,13 +730,93 @@ private fun ManageTaskDialog(
         },
     )
 
+    if (showNewTagColorPicker) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = {
+                showNewTagColorPicker = false
+                pendingNewTagLabel = ""
+            },
+            title = { Text("Choose color for \"$pendingNewTagLabel\"") },
+            text = {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    TaskTagUi.presetArgbSwatches.forEach { argb ->
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(TaskTagUi.composeColorFromArgb(argb))
+                                .clickable {
+                                    onTaskTagColorPicked(pendingNewTagLabel, argb)
+                                    tags = tags + pendingNewTagLabel
+                                    newTagText = ""
+                                    showNewTagColorPicker = false
+                                    pendingNewTagLabel = ""
+                                },
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        showNewTagColorPicker = false
+                        pendingNewTagLabel = ""
+                    },
+                ) { Text("Cancel") }
+            },
+        )
+    }
+
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(
-                if (task == null) "New Task" else "Edit Task",
-                style = MaterialTheme.typography.titleLarge,
-            )
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    if (task == null) "New Task" else "Edit Task",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.weight(1f),
+                )
+                if (task != null && task.id > 0L) {
+                    Box {
+                        IconButton(onClick = { dialogMenuExpanded = true }) {
+                            Icon(
+                                Icons.Default.MoreVert,
+                                contentDescription = "More options",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = dialogMenuExpanded,
+                            onDismissRequest = { dialogMenuExpanded = false },
+                        ) {
+                            if (!isCantComplete) {
+                                DropdownMenuItem(
+                                    text = { Text("Mark as won't do") },
+                                    onClick = {
+                                        dialogMenuExpanded = false
+                                        onMarkWontDo?.invoke()
+                                    },
+                                )
+                            } else {
+                                DropdownMenuItem(
+                                    text = { Text("Clear won't do") },
+                                    onClick = {
+                                        dialogMenuExpanded = false
+                                        onClearWontDo?.invoke()
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         },
         text = {
             Column(
@@ -725,11 +876,24 @@ private fun ManageTaskDialog(
                     onMinutesSelected = { durationMinutes = it },
                     useCompactTaskRow = true,
                 )
-                Text(
-                    "Ends at ${endTime.format(DateTimeFormatter.ofPattern("HH:mm"))} (${formatDurationMinutes(durationMinutes)})",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        "Ends at ${endTime.format(DateTimeFormatter.ofPattern("HH:mm"))} (${formatDurationMinutes(durationMinutes)})",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.align(Alignment.CenterVertically),
+                    )
+                    tags.forEach { tg ->
+                        TaskTagChip(
+                            label = tg,
+                            backgroundArgb = TaskTagUi.argbForTag(tg, taskTagColors),
+                        )
+                    }
+                }
                 val repeatLabel = when (repeatOption) {
                     TaskRepeatOption.NONE -> "Does not repeat"
                     TaskRepeatOption.DAILY -> "Daily (14 days)"
@@ -967,6 +1131,63 @@ private fun ManageTaskDialog(
                         modifier = Modifier.weight(1f),
                     )
                 }
+                Text("Tags", style = MaterialTheme.typography.labelMedium)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    suggestedTags.forEach { st ->
+                        val selected = tags.contains(st)
+                        androidx.compose.material3.FilterChip(
+                            selected = selected,
+                            onClick = {
+                                tags = if (selected) {
+                                    tags.filterNot { it == st }
+                                } else {
+                                    onEnsureDefaultTagColor(st)
+                                    tags + st
+                                }
+                            },
+                            label = { Text(st) },
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    androidx.compose.material3.OutlinedTextField(
+                        value = newTagText,
+                        onValueChange = { newTagText = it },
+                        label = { Text("New tag") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    androidx.compose.material3.Button(
+                        onClick = {
+                            val t = newTagText.trim()
+                            if (t.isNotEmpty() && !tags.contains(t)) {
+                                pendingNewTagLabel = t
+                                showNewTagColorPicker = true
+                            }
+                        },
+                    ) { Text("Add") }
+                }
+                if (tags.isNotEmpty()) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        tags.forEach { tg ->
+                            androidx.compose.material3.InputChip(
+                                selected = true,
+                                onClick = { tags = tags.filterNot { it == tg } },
+                                label = { Text(tg) },
+                            )
+                        }
+                    }
+                }
                 if (task != null && task.id > 0L && onStartPomodoro != null) {
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(
@@ -1007,12 +1228,14 @@ private fun ManageTaskDialog(
                         urgency,
                         isTop5,
                         isMustDo,
+                        isCantComplete,
                         displayNumber,
                         note.takeIf { it.isNotBlank() },
                         linkedGoalId,
                         repeatOption,
                         customDays,
                         repeatUntil,
+                        tags.map { it.trim() }.filter { it.isNotEmpty() }.distinct(),
                     )
                 },
             ) { Text("Save") }

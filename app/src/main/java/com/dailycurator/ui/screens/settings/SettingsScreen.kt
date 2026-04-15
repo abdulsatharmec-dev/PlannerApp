@@ -4,6 +4,7 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -35,9 +36,14 @@ import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -65,13 +71,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import android.net.Uri
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.dailycurator.R
 import com.dailycurator.data.ai.AiPromptDefaults
 import com.dailycurator.data.local.ChatFontSizeCategory
+import com.dailycurator.data.media.MorningPlaylistPref
+import com.dailycurator.data.media.MorningVideoBucket
 import com.dailycurator.data.gmail.GmailTokenResult
 import com.dailycurator.ui.LocalGmailLinkActions
 import com.dailycurator.ui.theme.AppBackgroundOption
@@ -82,6 +93,12 @@ import java.time.format.DateTimeFormatter
 
 private val sectionGap = 12.dp
 private val horizontalPad = 20.dp
+
+private sealed class AppLockPinSheet {
+    data object None : AppLockPinSheet()
+    data object Setup : AppLockPinSheet()
+    data object Change : AppLockPinSheet()
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -115,6 +132,17 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val phoneUsageAiContextDays by viewModel.phoneUsageAiContextDays.collectAsState()
     val phoneUsageWeeklyInsightDays by viewModel.phoneUsageWeeklyInsightDays.collectAsState()
     val llmProfiles by viewModel.llmProfiles.collectAsState()
+    val homeDailyPdfUri by viewModel.homeDailyPdfUri.collectAsState()
+    val morningLocalVideoUris by viewModel.morningLocalVideoUris.collectAsState()
+    val morningPlaylistEntries by viewModel.morningPlaylistEntries.collectAsState()
+    val morningYoutubeBlock by viewModel.morningYoutubeLinesBlock.collectAsState()
+    val morningSpiritualYoutubeBlock by viewModel.morningSpiritualYoutubeLinesBlock.collectAsState()
+    val morningMotivationAutoplay by viewModel.morningMotivationAutoplay.collectAsState()
+    val morningSpiritualLocalVideoUris by viewModel.morningSpiritualLocalVideoUris.collectAsState()
+    val morningSpiritualPlaylistEntries by viewModel.morningSpiritualPlaylistEntries.collectAsState()
+    val appLockEnabled by viewModel.appLockEnabled.collectAsState()
+    val appLockAllowBiometric by viewModel.appLockAllowBiometric.collectAsState()
+    val appLockPinConfigured by viewModel.appLockPinConfigured.collectAsState()
 
     var showLlmKeysDialog by remember { mutableStateOf(false) }
     var showAssistantPromptDialog by remember { mutableStateOf(false) }
@@ -123,6 +151,12 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     var showGmailSummaryPromptDialog by remember { mutableStateOf(false) }
     var showMemoryExtractionPromptDialog by remember { mutableStateOf(false) }
     var manualGmailAddress by rememberSaveable { mutableStateOf("") }
+    var showMorningLocalVideoPicker by remember { mutableStateOf(false) }
+    var showMorningPlaylistManager by remember { mutableStateOf(false) }
+    var morningPlaylistToEdit by remember { mutableStateOf<MorningPlaylistPref?>(null) }
+    var morningSettingsBucket by remember { mutableStateOf(MorningVideoBucket.MOTIVATION) }
+    var morningPlaylistEditBucket by remember { mutableStateOf(MorningVideoBucket.MOTIVATION) }
+    var appLockPinSheet by remember { mutableStateOf<AppLockPinSheet>(AppLockPinSheet.None) }
 
     val context = LocalContext.current
     val gmailLinkActions = LocalGmailLinkActions.current
@@ -140,6 +174,21 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 // Some providers still allow read without persistable permission.
             }
             viewModel.setCustomWallpaperUri(uri.toString())
+        }
+    }
+
+    val pickHomePdfLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            } catch (_: SecurityException) {
+            }
+            viewModel.setHomeDailyPdfUri(uri.toString())
         }
     }
 
@@ -205,6 +254,154 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 showMemoryExtractionPromptDialog = false
             },
         )
+    }
+    if (showMorningLocalVideoPicker) {
+        MorningLocalVideosPickerDialog(
+            bucket = morningSettingsBucket,
+            savedUris = when (morningSettingsBucket) {
+                MorningVideoBucket.MOTIVATION -> morningLocalVideoUris
+                MorningVideoBucket.SPIRITUAL -> morningSpiritualLocalVideoUris
+            },
+            onDismiss = { showMorningLocalVideoPicker = false },
+            onConfirm = { uris ->
+                viewModel.setMorningLocalVideoUrisForBucket(morningSettingsBucket, uris)
+                showMorningLocalVideoPicker = false
+            },
+            viewModel = viewModel,
+        )
+    }
+    val morningPlaylistEditEntry = morningPlaylistToEdit
+    if (morningPlaylistEditEntry != null) {
+        MorningPlaylistVideosDialog(
+            bucket = morningPlaylistEditBucket,
+            entry = morningPlaylistEditEntry,
+            onDismiss = { morningPlaylistToEdit = null },
+            viewModel = viewModel,
+        )
+    }
+    if (showMorningPlaylistManager) {
+        MorningPlaylistsManageDialog(
+            bucket = morningSettingsBucket,
+            entries = when (morningSettingsBucket) {
+                MorningVideoBucket.MOTIVATION -> morningPlaylistEntries
+                MorningVideoBucket.SPIRITUAL -> morningSpiritualPlaylistEntries
+            },
+            onDismiss = { showMorningPlaylistManager = false },
+            onEditPlaylist = {
+                morningPlaylistEditBucket = morningSettingsBucket
+                morningPlaylistToEdit = it
+                showMorningPlaylistManager = false
+            },
+            viewModel = viewModel,
+        )
+    }
+    when (val sheet = appLockPinSheet) {
+        AppLockPinSheet.None -> Unit
+        AppLockPinSheet.Setup -> {
+            var pin by remember { mutableStateOf("") }
+            var confirm by remember { mutableStateOf("") }
+            AlertDialog(
+                onDismissRequest = { appLockPinSheet = AppLockPinSheet.None },
+                title = { Text("Create app lock PIN") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "4–8 digits. You will enter this after the app has been in the background.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        OutlinedTextField(
+                            value = pin,
+                            onValueChange = { if (it.length <= 8 && it.all { c -> c.isDigit() }) pin = it },
+                            label = { Text("PIN") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        OutlinedTextField(
+                            value = confirm,
+                            onValueChange = { if (it.length <= 8 && it.all { c -> c.isDigit() }) confirm = it },
+                            label = { Text("Confirm PIN") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            if (pin.length < 4 || pin != confirm) {
+                                Toast.makeText(context, "PINs must match (4–8 digits).", Toast.LENGTH_SHORT).show()
+                                return@TextButton
+                            }
+                            viewModel.setAppLockPin(pin)
+                            viewModel.setAppLockEnabled(true)
+                            appLockPinSheet = AppLockPinSheet.None
+                        },
+                    ) { Text("Save") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { appLockPinSheet = AppLockPinSheet.None }) { Text("Cancel") }
+                },
+            )
+        }
+        AppLockPinSheet.Change -> {
+            var oldPin by remember { mutableStateOf("") }
+            var pin by remember { mutableStateOf("") }
+            var confirm by remember { mutableStateOf("") }
+            AlertDialog(
+                onDismissRequest = { appLockPinSheet = AppLockPinSheet.None },
+                title = { Text("Change app lock PIN") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = oldPin,
+                            onValueChange = { if (it.length <= 8 && it.all { c -> c.isDigit() }) oldPin = it },
+                            label = { Text("Current PIN") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        OutlinedTextField(
+                            value = pin,
+                            onValueChange = { if (it.length <= 8 && it.all { c -> c.isDigit() }) pin = it },
+                            label = { Text("New PIN") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        OutlinedTextField(
+                            value = confirm,
+                            onValueChange = { if (it.length <= 8 && it.all { c -> c.isDigit() }) confirm = it },
+                            label = { Text("Confirm new PIN") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            if (!viewModel.verifyAppLockPin(oldPin)) {
+                                Toast.makeText(context, "Current PIN is incorrect.", Toast.LENGTH_SHORT).show()
+                                return@TextButton
+                            }
+                            if (pin.length < 4 || pin != confirm) {
+                                Toast.makeText(context, "New PINs must match (4–8 digits).", Toast.LENGTH_SHORT).show()
+                                return@TextButton
+                            }
+                            viewModel.setAppLockPin(pin)
+                            appLockPinSheet = AppLockPinSheet.None
+                        },
+                    ) { Text("Save") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { appLockPinSheet = AppLockPinSheet.None }) { Text("Cancel") }
+                },
+            )
+        }
     }
     if (showPhoneUsagePromptDialog) {
         InsightPromptEditorDialog(
@@ -416,6 +613,185 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                         subtitle = minuteOfDayToLocalTime(dayWindow.endMinute).format(timeFmt),
                         onClick = { showDayEndPicker = true },
                     )
+                }
+            }
+        }
+
+        item {
+            SettingsSection(title = "App lock") {
+                Column(
+                    Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(
+                        "When you leave DayRoute (home button or another app), the screen locks until you enter your PIN. " +
+                            "Fingerprint or device credential can be offered if you allow it below.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    SettingsToggleRow(
+                        icon = Icons.Default.Lock,
+                        label = "Lock with PIN when you leave the app",
+                        checked = appLockEnabled,
+                        onCheckedChange = { enabled ->
+                            if (enabled) {
+                                if (appLockPinConfigured) viewModel.setAppLockEnabled(true)
+                                else appLockPinSheet = AppLockPinSheet.Setup
+                            } else {
+                                viewModel.setAppLockEnabled(false)
+                            }
+                        },
+                    )
+                    if (appLockPinConfigured) {
+                        OutlinedButton(
+                            onClick = { appLockPinSheet = AppLockPinSheet.Change },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Change PIN")
+                        }
+                        SettingsToggleRow(
+                            icon = null,
+                            label = "Offer fingerprint or screen lock on the lock screen",
+                            subtitle = "Uses the same biometrics you use to unlock your phone (when available).",
+                            checked = appLockAllowBiometric,
+                            onCheckedChange = { viewModel.setAppLockAllowBiometric(it) },
+                        )
+                    }
+                }
+            }
+        }
+
+        item {
+            SettingsSection(title = "Home videos (Today tab)") {
+                var youtubeDraft by rememberSaveable { mutableStateOf("") }
+                LaunchedEffect(morningSettingsBucket, morningYoutubeBlock, morningSpiritualYoutubeBlock) {
+                    youtubeDraft = when (morningSettingsBucket) {
+                        MorningVideoBucket.MOTIVATION -> morningYoutubeBlock
+                        MorningVideoBucket.SPIRITUAL -> morningSpiritualYoutubeBlock
+                    }
+                }
+
+                Column(
+                    Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(
+                        "Choose a category first, then add YouTube links, playlists, or device files for that shelf. " +
+                            "On Today you can switch between Motivation and Spiritual.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        FilterChip(
+                            selected = morningSettingsBucket == MorningVideoBucket.MOTIVATION,
+                            onClick = { morningSettingsBucket = MorningVideoBucket.MOTIVATION },
+                            label = { Text("Motivation") },
+                        )
+                        FilterChip(
+                            selected = morningSettingsBucket == MorningVideoBucket.SPIRITUAL,
+                            onClick = { morningSettingsBucket = MorningVideoBucket.SPIRITUAL },
+                            label = { Text("Spiritual") },
+                        )
+                    }
+                    SettingsToggleRow(
+                        icon = Icons.Default.PlayCircle,
+                        label = "Autoplay on Today tab",
+                        subtitle = "Off by default. When on, the selected clip starts as soon as the player is ready.",
+                        checked = morningMotivationAutoplay,
+                        onCheckedChange = { viewModel.setMorningMotivationAutoplay(it) },
+                    )
+                    OutlinedTextField(
+                        value = youtubeDraft,
+                        onValueChange = { youtubeDraft = it },
+                        label = {
+                            Text(
+                                if (morningSettingsBucket == MorningVideoBucket.SPIRITUAL) {
+                                    "Spiritual — single YouTube videos (one URL or id per line)"
+                                } else {
+                                    "Motivation — single YouTube videos (one URL or id per line)"
+                                },
+                            )
+                        },
+                        minLines = 2,
+                        maxLines = 6,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Button(
+                        onClick = {
+                            when (morningSettingsBucket) {
+                                MorningVideoBucket.MOTIVATION -> viewModel.setMorningYoutubeLinesBlock(youtubeDraft)
+                                MorningVideoBucket.SPIRITUAL ->
+                                    viewModel.setMorningSpiritualYoutubeLinesBlock(youtubeDraft)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Save single-video list")
+                    }
+                    val playlistCount = when (morningSettingsBucket) {
+                        MorningVideoBucket.MOTIVATION -> morningPlaylistEntries.size
+                        MorningVideoBucket.SPIRITUAL -> morningSpiritualPlaylistEntries.size
+                    }
+                    val deviceCount = when (morningSettingsBucket) {
+                        MorningVideoBucket.MOTIVATION -> morningLocalVideoUris.size
+                        MorningVideoBucket.SPIRITUAL -> morningSpiritualLocalVideoUris.size
+                    }
+                    OutlinedButton(
+                        onClick = { showMorningPlaylistManager = true },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Default.AddLink, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("YouTube playlists ($playlistCount)")
+                    }
+                    OutlinedButton(
+                        onClick = { showMorningLocalVideoPicker = true },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Default.VideoLibrary, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Device videos ($deviceCount) — pick in list")
+                    }
+                }
+            }
+        }
+
+        item {
+            SettingsSection(title = "Daily PDF on Home") {
+                Column(
+                    Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(
+                        "Opens on the Today tab (section order can be changed from Today → ⋮ → Customize home layout). The last page you viewed is remembered.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Button(
+                        onClick = { pickHomePdfLauncher.launch(arrayOf("application/pdf")) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Choose PDF file")
+                    }
+                    if (homeDailyPdfUri.isNotBlank()) {
+                        val short = Uri.parse(homeDailyPdfUri).lastPathSegment?.take(48) ?: homeDailyPdfUri.take(48)
+                        Text(
+                            "Current: $short",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        OutlinedButton(
+                            onClick = { viewModel.clearHomeDailyPdf() },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Clear PDF")
+                        }
+                    }
                 }
             }
         }
@@ -823,7 +1199,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            "Daily Curator",
+                            stringResource(R.string.app_name),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurface,
                         )

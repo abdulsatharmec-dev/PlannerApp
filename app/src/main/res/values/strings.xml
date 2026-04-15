@@ -1,5 +1,18 @@
 <resources>
-    <string name="app_name">Daily Curator</string>
+    <string name="app_name">Day Planner</string>
+    <string name="fullscreen_video_rotate">Rotate</string>
+    <string name="fullscreen_video_rotate_undo">Fill</string>
+    <string name="fullscreen_touch_lock">Lock touches</string>
+    <string name="fullscreen_touch_unlock">Unlock touches</string>
+    <string name="fullscreen_close">Close</string>
+    <string name="embedded_touch_lock">Lock</string>
+    <string name="embedded_touch_unlock">Unlock</string>
+    <string name="morning_playback_channel_name">Morning video</string>
+    <string name="morning_playback_notification_title">Morning video</string>
+    <string name="morning_playback_notification_playing">Playing…</string>
+    <string name="morning_playback_notification_paused">Paused</string>
+    <string name="morning_playback_action_pause">Pause</string>
+    <string name="morning_playback_action_resume">Resume</string>
     <!-- Web application OAuth client ID (not Android client). Required for reliable Gmail scope consent; pair with Android OAuth client using the same project and your debug/release SHA-1. -->
     <string name="default_web_client_id">REPLACE_WITH_WEB_CLIENT_ID</string>
 </resources>

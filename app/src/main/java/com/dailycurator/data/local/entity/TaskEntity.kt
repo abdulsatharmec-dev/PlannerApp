@@ -17,6 +17,8 @@ data class TaskEntity(
     val isDone: Boolean = false,
     val isTopFive: Boolean = false,
     val isMustDo: Boolean = false,
+    /** User-marked as not completable (blocked, unavailable, etc.). */
+    val isCantComplete: Boolean = false,
     val displayNumber: Int = 0,
     @ColumnInfo(index = true) val goalId: Long? = null,
     /** Shared id for tasks created from one repeating add/edit; null = standalone. */

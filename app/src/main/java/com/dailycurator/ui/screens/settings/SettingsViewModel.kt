@@ -1,5 +1,6 @@
 package com.dailycurator.ui.screens.settings
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -10,11 +11,16 @@ import com.dailycurator.data.gmail.GmailTokenProvider
 import com.dailycurator.data.gmail.GmailTokenResult
 import com.dailycurator.data.local.AppPreferences
 import com.dailycurator.data.local.ChatFontSizeCategory
+import com.dailycurator.data.media.MorningPlaylistPref
+import com.dailycurator.data.media.MorningVideoBucket
+import com.dailycurator.data.media.YoutubePlaylistIdExtractor
+import com.dailycurator.data.media.YoutubePlaylistVideoIdsFetcher
 import com.dailycurator.data.local.DayWindowMinutes
 import com.dailycurator.data.local.CEREBRAS_MODEL_OPTIONS
 import com.dailycurator.data.local.CerebrasModelOption
 import com.dailycurator.data.local.LlmApiKeyProfile
 import com.dailycurator.ui.theme.AppBackgroundOption
+import com.dailycurator.security.AppPinHasher
 import com.dailycurator.ui.theme.AppThemePalette
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -22,8 +28,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.stateIn
+import android.os.Build
+import android.provider.MediaStore
+import android.content.ContentUris
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalTime
@@ -33,6 +42,7 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val prefs: AppPreferences,
     private val gmailTokenProvider: GmailTokenProvider,
+    private val youtubePlaylistVideoIdsFetcher: YoutubePlaylistVideoIdsFetcher,
     @param:ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
@@ -127,6 +137,40 @@ class SettingsViewModel @Inject constructor(
 
     val llmProfiles: StateFlow<List<LlmApiKeyProfile>> = prefs.llmProfilesFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.getLlmProfiles())
+
+    val morningYoutubeLinesBlock: StateFlow<String> = prefs.morningYoutubeLinesBlockFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.getMorningYoutubeLinesBlock())
+
+    val morningLocalVideoUris: StateFlow<List<String>> = prefs.morningLocalVideoUrisFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.getMorningLocalVideoUris())
+
+    val morningPlaylistEntries: StateFlow<List<MorningPlaylistPref>> = prefs.morningPlaylistEntriesFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.getMorningPlaylistEntries())
+
+    val morningSpiritualYoutubeLinesBlock: StateFlow<String> = prefs.morningSpiritualYoutubeLinesBlockFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.getMorningSpiritualYoutubeLinesBlock())
+
+    val morningSpiritualLocalVideoUris: StateFlow<List<String>> = prefs.morningSpiritualLocalVideoUrisFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.getMorningSpiritualLocalVideoUris())
+
+    val morningSpiritualPlaylistEntries: StateFlow<List<MorningPlaylistPref>> =
+        prefs.morningSpiritualPlaylistEntriesFlow
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.getMorningSpiritualPlaylistEntries())
+
+    val appLockEnabled: StateFlow<Boolean> = prefs.appLockEnabledFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.isAppLockEnabled())
+
+    val appLockAllowBiometric: StateFlow<Boolean> = prefs.appLockAllowBiometricFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.isAppLockBiometricAllowed())
+
+    val appLockPinConfigured: StateFlow<Boolean> = prefs.appLockPinConfiguredFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.hasAppLockPin())
+
+    val morningMotivationAutoplay: StateFlow<Boolean> = prefs.morningMotivationAutoplayFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.isMorningMotivationAutoplayEnabled())
+
+    val homeDailyPdfUri: StateFlow<String> = prefs.homeDailyPdfUriFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.getHomeDailyPdfUri())
 
     fun toggleDarkTheme() = prefs.setDarkTheme(!isDarkTheme.value)
 
@@ -310,4 +354,163 @@ class SettingsViewModel @Inject constructor(
             },
         )
     }
+
+    fun setMorningYoutubeLinesBlock(block: String) {
+        prefs.setMorningYoutubeLinesBlock(block)
+    }
+
+    fun setMorningSpiritualYoutubeLinesBlock(block: String) {
+        prefs.setMorningSpiritualYoutubeLinesBlock(block)
+    }
+
+    fun setMorningLocalVideoUris(uris: List<String>) {
+        prefs.setMorningLocalVideoUris(uris)
+    }
+
+    fun setMorningLocalVideoUrisForBucket(bucket: MorningVideoBucket, uris: List<String>) {
+        when (bucket) {
+            MorningVideoBucket.MOTIVATION -> prefs.setMorningLocalVideoUris(uris)
+            MorningVideoBucket.SPIRITUAL -> prefs.setMorningSpiritualLocalVideoUris(uris)
+        }
+    }
+
+    fun setMorningPlaylistEntries(entries: List<MorningPlaylistPref>) {
+        prefs.setMorningPlaylistEntries(entries)
+    }
+
+    fun setMorningSpiritualPlaylistEntries(entries: List<MorningPlaylistPref>) {
+        prefs.setMorningSpiritualPlaylistEntries(entries)
+    }
+
+    fun addMorningPlaylistFromWatchUrl(url: String, bucket: MorningVideoBucket): Boolean {
+        val pid = YoutubePlaylistIdExtractor.extractPlaylistIdFromWatchUrl(url) ?: return false
+        return when (bucket) {
+            MorningVideoBucket.MOTIVATION -> {
+                val cur = prefs.getMorningPlaylistEntries().toMutableList()
+                if (cur.any { it.playlistId == pid }) return false
+                cur.add(MorningPlaylistPref(playlistId = pid, sourceWatchUrl = url.trim()))
+                prefs.setMorningPlaylistEntries(cur)
+                true
+            }
+            MorningVideoBucket.SPIRITUAL -> {
+                val cur = prefs.getMorningSpiritualPlaylistEntries().toMutableList()
+                if (cur.any { it.playlistId == pid }) return false
+                cur.add(MorningPlaylistPref(playlistId = pid, sourceWatchUrl = url.trim()))
+                prefs.setMorningSpiritualPlaylistEntries(cur)
+                true
+            }
+        }
+    }
+
+    fun removeMorningPlaylist(playlistId: String, bucket: MorningVideoBucket) {
+        when (bucket) {
+            MorningVideoBucket.MOTIVATION -> prefs.setMorningPlaylistEntries(
+                prefs.getMorningPlaylistEntries().filterNot { it.playlistId == playlistId },
+            )
+            MorningVideoBucket.SPIRITUAL -> prefs.setMorningSpiritualPlaylistEntries(
+                prefs.getMorningSpiritualPlaylistEntries().filterNot { it.playlistId == playlistId },
+            )
+        }
+    }
+
+    fun updateMorningPlaylistExcluded(playlistId: String, excludedVideoIds: List<String>, bucket: MorningVideoBucket) {
+        when (bucket) {
+            MorningVideoBucket.MOTIVATION -> {
+                val cur = prefs.getMorningPlaylistEntries().map { pl ->
+                    if (pl.playlistId == playlistId) pl.copy(excludedVideoIds = excludedVideoIds.distinct()) else pl
+                }
+                prefs.setMorningPlaylistEntries(cur)
+            }
+            MorningVideoBucket.SPIRITUAL -> {
+                val cur = prefs.getMorningSpiritualPlaylistEntries().map { pl ->
+                    if (pl.playlistId == playlistId) pl.copy(excludedVideoIds = excludedVideoIds.distinct()) else pl
+                }
+                prefs.setMorningSpiritualPlaylistEntries(cur)
+            }
+        }
+    }
+
+    suspend fun fetchPlaylistVideoIdsForEditor(playlistId: String): List<String> =
+        youtubePlaylistVideoIdsFetcher.fetchOrderedVideoIds(playlistId, forceRefresh = true)
+
+    suspend fun queryDeviceVideosForPicker(): List<DeviceVideoListItem> = withContext(Dispatchers.IO) {
+        val resolver = appContext.contentResolver
+        val projection = arrayOf(
+            MediaStore.Video.Media._ID,
+            MediaStore.Video.Media.DISPLAY_NAME,
+            MediaStore.Video.Media.DURATION,
+        )
+        val sort = "${MediaStore.Video.Media.DATE_ADDED} DESC"
+        val list = ArrayList<DeviceVideoListItem>(256)
+        resolver.query(
+            MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+            projection,
+            null,
+            null,
+            sort,
+        )?.use { c ->
+            val idCol = c.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
+            val nameCol = c.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
+            val durCol = c.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
+            while (c.moveToNext()) {
+                val id = c.getLong(idCol)
+                val name = c.getString(nameCol)?.trim().orEmpty().ifEmpty { "Video $id" }
+                val dur = c.getLong(durCol).takeIf { it > 0L }
+                list.add(DeviceVideoListItem(id = id, displayName = name, durationMs = dur))
+            }
+        }
+        list
+    }
+
+    fun contentUriStringForVideoMediaId(id: Long): String =
+        ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id).toString()
+
+    fun videoReadPermission(): String =
+        if (Build.VERSION.SDK_INT >= 33) {
+            Manifest.permission.READ_MEDIA_VIDEO
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+
+    fun setMorningMotivationAutoplay(enabled: Boolean) {
+        prefs.setMorningMotivationAutoplayEnabled(enabled)
+    }
+
+    fun setAppLockEnabled(enabled: Boolean) {
+        prefs.setAppLockEnabled(enabled)
+        if (!enabled) {
+            prefs.clearAppLockPin()
+        }
+    }
+
+    fun setAppLockAllowBiometric(allowed: Boolean) {
+        prefs.setAppLockBiometricAllowed(allowed)
+    }
+
+    fun setAppLockPin(pin: String) {
+        val salt = AppPinHasher.randomSaltHex()
+        val hash = AppPinHasher.sha256Hex(salt, pin)
+        prefs.setAppLockPin(salt, hash)
+    }
+
+    fun verifyAppLockPin(pin: String): Boolean {
+        val salt = prefs.getAppLockPinSalt()
+        val hash = prefs.getAppLockPinHash()
+        if (salt.isBlank() || hash.isBlank()) return false
+        return AppPinHasher.sha256Hex(salt, pin) == hash
+    }
+
+    fun setHomeDailyPdfUri(uri: String) {
+        prefs.setHomeDailyPdfUri(uri)
+    }
+
+    fun clearHomeDailyPdf() {
+        prefs.setHomeDailyPdfUri("")
+    }
 }
+
+data class DeviceVideoListItem(
+    val id: Long,
+    val displayName: String,
+    val durationMs: Long?,
+)

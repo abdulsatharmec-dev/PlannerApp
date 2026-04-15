@@ -213,6 +213,7 @@ class ChatToolExecutor @Inject constructor(
             urgency = urgency,
             isTopFive = top,
             isMustDo = mustDo,
+            isCantComplete = args.optBoolean("cant_complete") == true,
             displayNumber = displayNumber,
             goalId = goalId,
             date = date,
@@ -237,6 +238,7 @@ class ChatToolExecutor @Inject constructor(
         args.optString("note")?.let { t = t.copy(statusNote = it) }
         args.optBoolean("done")?.let { t = t.copy(isDone = it) }
         args.optBoolean("must_do")?.let { t = t.copy(isMustDo = it) }
+        args.optBoolean("cant_complete")?.let { t = t.copy(isCantComplete = it) }
         args.optInt("display_number")?.let { t = t.copy(displayNumber = it.coerceIn(0, 999)) }
         if (args.has("goal_id")) {
             val gid = args.optLong("goal_id")

@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.dailycurator.data.ai.AiPromptDefaults
 import com.dailycurator.data.gmail.GmailLinkedAccountPref
+import com.dailycurator.data.media.MorningPlaylistPref
+import com.dailycurator.data.media.MorningVideoBucket
 import com.dailycurator.ui.theme.AppBackgroundOption
 import com.dailycurator.ui.theme.AppThemePalette
 import com.google.gson.Gson
@@ -13,6 +15,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import java.util.HashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -50,12 +53,45 @@ private const val KEY_PHONE_USAGE_AI_CONTEXT_DAYS = "phone_usage_ai_context_days
 private const val KEY_PHONE_USAGE_WEEKLY_INSIGHT_DAYS = "phone_usage_weekly_insight_days"
 private const val KEY_PHONE_USAGE_SCREEN_RANGE_DAYS = "phone_usage_screen_range_days"
 private const val KEY_LLM_PROFILES_JSON = "llm_api_key_profiles_json"
+private const val KEY_MORNING_YOUTUBE_LINES = "morning_motivation_youtube_lines"
+private const val KEY_MORNING_LOCAL_VIDEO_URIS_JSON = "morning_motivation_local_video_uris_json"
+private const val KEY_MORNING_PLAYLIST_ENTRIES_JSON = "morning_playlist_entries_json"
+private const val KEY_MORNING_PLAYLIST_DEFAULTS_APPLIED = "morning_playlist_defaults_applied_v1"
+private const val KEY_MORNING_MOTIVATION_AUTOPLAY = "morning_motivation_autoplay"
+private const val KEY_HOME_DAILY_PDF_URI = "home_daily_pdf_uri"
+private const val KEY_HOME_DAILY_PDF_LAST_PAGE = "home_daily_pdf_last_page"
+private const val KEY_HOME_PDF_VIEW_MODE = "home_pdf_view_mode"
+private const val KEY_HOME_PDF_THEME_DARK = "home_pdf_theme_dark"
+private const val KEY_HOME_PDF_ZOOM_SCALE = "home_pdf_zoom_scale"
+private const val KEY_HOME_LAYOUT_SECTION_ORDER_JSON = "home_layout_section_order_json"
+private const val KEY_SHOW_MUST_DO_TASKS = "tasks_show_must_do_v1"
+private const val KEY_SHOW_WONT_DO_TASKS = "tasks_show_wont_do_v1"
+private const val KEY_TASK_TAG_COLORS_JSON = "task_tag_colors_json_v1"
+private const val KEY_HOME_MORNING_VIDEO_TAB = "home_morning_video_tab"
+private const val KEY_MORNING_SPIRITUAL_YOUTUBE_LINES = "morning_spiritual_youtube_lines"
+private const val KEY_MORNING_SPIRITUAL_LOCAL_VIDEO_URIS_JSON = "morning_spiritual_local_video_uris_json"
+private const val KEY_MORNING_SPIRITUAL_PLAYLIST_ENTRIES_JSON = "morning_spiritual_playlist_entries_json"
+private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
+private const val KEY_APP_LOCK_PIN_SALT = "app_lock_pin_salt"
+private const val KEY_APP_LOCK_PIN_HASH = "app_lock_pin_hash"
+private const val KEY_APP_LOCK_ALLOW_BIOMETRIC = "app_lock_allow_biometric"
 
 /** Minutes from midnight; inclusive schedule / “day” window on the home screen. */
 data class DayWindowMinutes(val startMinute: Int, val endMinute: Int)
 
 private const val DEFAULT_DAY_START_MIN = 4 * 60   // 4:00
 private const val DEFAULT_DAY_END_MIN = 22 * 60    // 22:00
+
+private val defaultMorningPlaylists: List<MorningPlaylistPref> = listOf(
+    MorningPlaylistPref(
+        playlistId = "PLQ02IYL5pmhFYDrmxNHAlwgcHOR4h1bPa",
+        sourceWatchUrl = "https://www.youtube.com/watch?v=1mub-ru8BTo&list=PLQ02IYL5pmhFYDrmxNHAlwgcHOR4h1bPa",
+    ),
+    MorningPlaylistPref(
+        playlistId = "PLQ02IYL5pmhH0KWBrGxxR-lCCwlTFIVbm",
+        sourceWatchUrl = "https://www.youtube.com/watch?v=MfDb8isHUtk&list=PLQ02IYL5pmhH0KWBrGxxR-lCCwlTFIVbm",
+    ),
+)
 
 @Singleton
 class AppPreferences @Inject constructor(
@@ -68,6 +104,9 @@ class AppPreferences @Inject constructor(
 
     private val gmailAccountListType = object : TypeToken<ArrayList<GmailLinkedAccountPref>>() {}.type
     private val llmProfileListType = object : TypeToken<ArrayList<LlmApiKeyProfile>>() {}.type
+    private val stringListType = object : TypeToken<ArrayList<String>>() {}.type
+    private val morningPlaylistListType = object : TypeToken<ArrayList<MorningPlaylistPref>>() {}.type
+    private val stringIntMapType = object : TypeToken<HashMap<String, Int>>() {}.type
 
     /** Emits the current dark-theme value and re-emits whenever it changes. */
     val darkThemeFlow: Flow<Boolean> = callbackFlow {
@@ -155,6 +194,192 @@ class AppPreferences @Inject constructor(
         }
         prefs.registerOnSharedPreferenceChangeListener(listener)
         trySend(getLlmProfiles())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    /** Raw multiline text: one YouTube URL or 11-char id per line (shown/edited in Settings). */
+    val morningYoutubeLinesBlockFlow: Flow<String> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_MORNING_YOUTUBE_LINES) trySend(getMorningYoutubeLinesBlock())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getMorningYoutubeLinesBlock())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val morningLocalVideoUrisFlow: Flow<List<String>> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_MORNING_LOCAL_VIDEO_URIS_JSON) trySend(getMorningLocalVideoUris())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getMorningLocalVideoUris())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val morningPlaylistEntriesFlow: Flow<List<MorningPlaylistPref>> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_MORNING_PLAYLIST_ENTRIES_JSON ||
+                key == KEY_MORNING_PLAYLIST_DEFAULTS_APPLIED
+            ) {
+                trySend(getMorningPlaylistEntries())
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getMorningPlaylistEntries())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val morningSpiritualYoutubeLinesBlockFlow: Flow<String> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_MORNING_SPIRITUAL_YOUTUBE_LINES) trySend(getMorningSpiritualYoutubeLinesBlock())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getMorningSpiritualYoutubeLinesBlock())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val morningSpiritualLocalVideoUrisFlow: Flow<List<String>> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_MORNING_SPIRITUAL_LOCAL_VIDEO_URIS_JSON) trySend(getMorningSpiritualLocalVideoUris())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getMorningSpiritualLocalVideoUris())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val morningSpiritualPlaylistEntriesFlow: Flow<List<MorningPlaylistPref>> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_MORNING_SPIRITUAL_PLAYLIST_ENTRIES_JSON) trySend(getMorningSpiritualPlaylistEntries())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getMorningSpiritualPlaylistEntries())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val showMustDoTasksFlow: Flow<Boolean> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_SHOW_MUST_DO_TASKS) trySend(isShowMustDoTasksEnabled())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(isShowMustDoTasksEnabled())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val showWontDoTasksFlow: Flow<Boolean> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_SHOW_WONT_DO_TASKS) trySend(isShowWontDoTasksEnabled())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(isShowWontDoTasksEnabled())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val taskTagColorsFlow: Flow<Map<String, Int>> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_TASK_TAG_COLORS_JSON) trySend(getTaskTagColors())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getTaskTagColors())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val homeMorningVideoTabFlow: Flow<MorningVideoBucket> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_HOME_MORNING_VIDEO_TAB) trySend(getHomeMorningVideoTab())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getHomeMorningVideoTab())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val appLockEnabledFlow: Flow<Boolean> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_APP_LOCK_ENABLED) trySend(isAppLockEnabled())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(isAppLockEnabled())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val appLockAllowBiometricFlow: Flow<Boolean> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_APP_LOCK_ALLOW_BIOMETRIC) trySend(isAppLockBiometricAllowed())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(isAppLockBiometricAllowed())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val appLockPinConfiguredFlow: Flow<Boolean> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_APP_LOCK_PIN_HASH || key == KEY_APP_LOCK_PIN_SALT) trySend(hasAppLockPin())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(hasAppLockPin())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    /** When true, morning motivation clips start playback as soon as the player is ready. Default off. */
+    val morningMotivationAutoplayFlow: Flow<Boolean> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_MORNING_MOTIVATION_AUTOPLAY) trySend(isMorningMotivationAutoplayEnabled())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(isMorningMotivationAutoplayEnabled())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val homeDailyPdfUriFlow: Flow<String> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_HOME_DAILY_PDF_URI) trySend(getHomeDailyPdfUri())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getHomeDailyPdfUri())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val homeDailyPdfLastPageFlow: Flow<Int> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_HOME_DAILY_PDF_LAST_PAGE) trySend(getHomeDailyPdfLastPage())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getHomeDailyPdfLastPage())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val homePdfViewModeFlow: Flow<HomePdfViewMode> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_HOME_PDF_VIEW_MODE) trySend(getHomePdfViewMode())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getHomePdfViewMode())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val homePdfThemeDarkFlow: Flow<Boolean> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_HOME_PDF_THEME_DARK) trySend(isHomePdfThemeDark())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(isHomePdfThemeDark())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val homePdfZoomScaleFlow: Flow<Float> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_HOME_PDF_ZOOM_SCALE) trySend(getHomePdfZoomScale())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getHomePdfZoomScale())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val homeLayoutSectionOrderFlow: Flow<List<HomeLayoutSection>> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_HOME_LAYOUT_SECTION_ORDER_JSON) trySend(getHomeLayoutSectionOrder())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getHomeLayoutSectionOrder())
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }.distinctUntilChanged()
 
@@ -631,4 +856,254 @@ class AppPreferences @Inject constructor(
     }
 
     fun isLlmConfigured(): Boolean = llmEndpointsForFailover().isNotEmpty()
+
+    fun getMorningYoutubeLinesBlock(): String =
+        prefs.getString(KEY_MORNING_YOUTUBE_LINES, "") ?: ""
+
+    fun setMorningYoutubeLinesBlock(block: String) {
+        prefs.edit().putString(KEY_MORNING_YOUTUBE_LINES, block).apply()
+    }
+
+    fun getMorningLocalVideoUris(): List<String> {
+        val raw = prefs.getString(KEY_MORNING_LOCAL_VIDEO_URIS_JSON, null) ?: return emptyList()
+        @Suppress("UNCHECKED_CAST")
+        val parsed = runCatching {
+            gson.fromJson<ArrayList<String>>(raw, stringListType)
+        }.getOrNull()
+        return parsed?.filter { it.isNotBlank() }?.distinct() ?: emptyList()
+    }
+
+    fun setMorningLocalVideoUris(uris: List<String>) {
+        val clean = uris.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        prefs.edit().putString(KEY_MORNING_LOCAL_VIDEO_URIS_JSON, gson.toJson(ArrayList(clean))).apply()
+    }
+
+    /**
+     * Saved YouTube playlists (from watch URLs with `list=`). On first read after install,
+     * two built-in playlists are written once; users can remove or edit exclusions later.
+     */
+    fun getMorningPlaylistEntries(): List<MorningPlaylistPref> {
+        if (!prefs.getBoolean(KEY_MORNING_PLAYLIST_DEFAULTS_APPLIED, false)) {
+            prefs.edit()
+                .putBoolean(KEY_MORNING_PLAYLIST_DEFAULTS_APPLIED, true)
+                .putString(
+                    KEY_MORNING_PLAYLIST_ENTRIES_JSON,
+                    gson.toJson(ArrayList(defaultMorningPlaylists)),
+                )
+                .apply()
+            return defaultMorningPlaylists
+        }
+        val raw = prefs.getString(KEY_MORNING_PLAYLIST_ENTRIES_JSON, null) ?: return emptyList()
+        @Suppress("UNCHECKED_CAST")
+        val parsed = runCatching {
+            gson.fromJson<ArrayList<MorningPlaylistPref>>(raw, morningPlaylistListType)
+        }.getOrNull()
+        return parsed?.filter { it.playlistId.isNotBlank() } ?: emptyList()
+    }
+
+    fun setMorningPlaylistEntries(entries: List<MorningPlaylistPref>) {
+        val clean = entries
+            .map { it.copy(playlistId = it.playlistId.trim(), sourceWatchUrl = it.sourceWatchUrl.trim()) }
+            .filter { it.playlistId.isNotEmpty() }
+            .distinctBy { it.playlistId }
+            .map { pl ->
+                pl.copy(
+                    excludedVideoIds = pl.excludedVideoIds
+                        .map { x -> x.trim() }
+                        .filter { x -> x.length == 11 }
+                        .distinct(),
+                )
+            }
+        prefs.edit().putString(KEY_MORNING_PLAYLIST_ENTRIES_JSON, gson.toJson(ArrayList(clean))).apply()
+    }
+
+    fun isMorningMotivationAutoplayEnabled(): Boolean =
+        prefs.getBoolean(KEY_MORNING_MOTIVATION_AUTOPLAY, false)
+
+    fun setMorningMotivationAutoplayEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_MORNING_MOTIVATION_AUTOPLAY, enabled).apply()
+    }
+
+    /** Tasks tab: when false, must-do tasks are hidden until the user enables them in the menu. */
+    fun isShowMustDoTasksEnabled(): Boolean =
+        prefs.getBoolean(KEY_SHOW_MUST_DO_TASKS, false)
+
+    fun setShowMustDoTasksEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_SHOW_MUST_DO_TASKS, enabled).apply()
+    }
+
+    /** Tasks marked “won’t do” (can’t complete) are hidden unless this is on (default off). */
+    fun isShowWontDoTasksEnabled(): Boolean =
+        prefs.getBoolean(KEY_SHOW_WONT_DO_TASKS, false)
+
+    fun setShowWontDoTasksEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_SHOW_WONT_DO_TASKS, enabled).apply()
+    }
+
+    fun getTaskTagColors(): Map<String, Int> {
+        val raw = prefs.getString(KEY_TASK_TAG_COLORS_JSON, null) ?: return emptyMap()
+        @Suppress("UNCHECKED_CAST")
+        val parsed = runCatching {
+            gson.fromJson<HashMap<String, Int>>(raw, stringIntMapType)
+        }.getOrNull()
+        return parsed?.mapKeys { it.key.trim() }?.filterKeys { it.isNotEmpty() } ?: emptyMap()
+    }
+
+    fun setTaskTagColor(tagName: String, argb: Int) {
+        val key = tagName.trim()
+        if (key.isEmpty()) return
+        val cur = getTaskTagColors().toMutableMap()
+        cur[key] = argb
+        prefs.edit().putString(KEY_TASK_TAG_COLORS_JSON, gson.toJson(HashMap(cur))).apply()
+    }
+
+    fun getMorningSpiritualYoutubeLinesBlock(): String =
+        prefs.getString(KEY_MORNING_SPIRITUAL_YOUTUBE_LINES, "") ?: ""
+
+    fun setMorningSpiritualYoutubeLinesBlock(block: String) {
+        prefs.edit().putString(KEY_MORNING_SPIRITUAL_YOUTUBE_LINES, block).apply()
+    }
+
+    fun getMorningSpiritualLocalVideoUris(): List<String> {
+        val raw = prefs.getString(KEY_MORNING_SPIRITUAL_LOCAL_VIDEO_URIS_JSON, null) ?: return emptyList()
+        @Suppress("UNCHECKED_CAST")
+        val parsed = runCatching {
+            gson.fromJson<ArrayList<String>>(raw, stringListType)
+        }.getOrNull()
+        return parsed?.filter { it.isNotBlank() }?.distinct() ?: emptyList()
+    }
+
+    fun setMorningSpiritualLocalVideoUris(uris: List<String>) {
+        val clean = uris.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        prefs.edit().putString(KEY_MORNING_SPIRITUAL_LOCAL_VIDEO_URIS_JSON, gson.toJson(ArrayList(clean))).apply()
+    }
+
+    fun getMorningSpiritualPlaylistEntries(): List<MorningPlaylistPref> {
+        val raw = prefs.getString(KEY_MORNING_SPIRITUAL_PLAYLIST_ENTRIES_JSON, null) ?: return emptyList()
+        @Suppress("UNCHECKED_CAST")
+        val parsed = runCatching {
+            gson.fromJson<ArrayList<MorningPlaylistPref>>(raw, morningPlaylistListType)
+        }.getOrNull()
+        return parsed?.filter { it.playlistId.isNotBlank() } ?: emptyList()
+    }
+
+    fun setMorningSpiritualPlaylistEntries(entries: List<MorningPlaylistPref>) {
+        val clean = entries
+            .map { it.copy(playlistId = it.playlistId.trim(), sourceWatchUrl = it.sourceWatchUrl.trim()) }
+            .filter { it.playlistId.isNotEmpty() }
+            .distinctBy { it.playlistId }
+            .map { pl ->
+                pl.copy(
+                    excludedVideoIds = pl.excludedVideoIds
+                        .map { x -> x.trim() }
+                        .filter { x -> x.length == 11 }
+                        .distinct(),
+                )
+            }
+        prefs.edit().putString(
+            KEY_MORNING_SPIRITUAL_PLAYLIST_ENTRIES_JSON,
+            gson.toJson(ArrayList(clean)),
+        ).apply()
+    }
+
+    fun getHomeMorningVideoTab(): MorningVideoBucket {
+        val raw = prefs.getString(KEY_HOME_MORNING_VIDEO_TAB, "motivation")?.trim()?.lowercase()
+        return if (raw == "spiritual") MorningVideoBucket.SPIRITUAL else MorningVideoBucket.MOTIVATION
+    }
+
+    fun setHomeMorningVideoTab(tab: MorningVideoBucket) {
+        prefs.edit().putString(
+            KEY_HOME_MORNING_VIDEO_TAB,
+            if (tab == MorningVideoBucket.SPIRITUAL) "spiritual" else "motivation",
+        ).apply()
+    }
+
+    fun isAppLockEnabled(): Boolean = prefs.getBoolean(KEY_APP_LOCK_ENABLED, false)
+
+    fun setAppLockEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_APP_LOCK_ENABLED, enabled).apply()
+    }
+
+    fun getAppLockPinSalt(): String = prefs.getString(KEY_APP_LOCK_PIN_SALT, "") ?: ""
+
+    fun getAppLockPinHash(): String = prefs.getString(KEY_APP_LOCK_PIN_HASH, "") ?: ""
+
+    fun setAppLockPin(salt: String, hashHex: String) {
+        prefs.edit()
+            .putString(KEY_APP_LOCK_PIN_SALT, salt)
+            .putString(KEY_APP_LOCK_PIN_HASH, hashHex)
+            .apply()
+    }
+
+    fun clearAppLockPin() {
+        prefs.edit()
+            .remove(KEY_APP_LOCK_PIN_SALT)
+            .remove(KEY_APP_LOCK_PIN_HASH)
+            .apply()
+    }
+
+    fun hasAppLockPin(): Boolean = getAppLockPinHash().isNotBlank() && getAppLockPinSalt().isNotBlank()
+
+    fun isAppLockBiometricAllowed(): Boolean = prefs.getBoolean(KEY_APP_LOCK_ALLOW_BIOMETRIC, true)
+
+    fun setAppLockBiometricAllowed(allowed: Boolean) {
+        prefs.edit().putBoolean(KEY_APP_LOCK_ALLOW_BIOMETRIC, allowed).apply()
+    }
+
+    fun getHomeDailyPdfUri(): String = prefs.getString(KEY_HOME_DAILY_PDF_URI, "") ?: ""
+
+    fun setHomeDailyPdfUri(uri: String) {
+        val t = uri.trim()
+        val ed = prefs.edit().putString(KEY_HOME_DAILY_PDF_URI, t)
+        if (t.isEmpty()) {
+            ed.remove(KEY_HOME_DAILY_PDF_LAST_PAGE)
+        } else {
+            ed.putInt(KEY_HOME_DAILY_PDF_LAST_PAGE, 0)
+        }
+        ed.apply()
+    }
+
+    fun getHomeDailyPdfLastPage(): Int =
+        prefs.getInt(KEY_HOME_DAILY_PDF_LAST_PAGE, 0).coerceAtLeast(0)
+
+    fun setHomeDailyPdfLastPage(page: Int) {
+        prefs.edit().putInt(KEY_HOME_DAILY_PDF_LAST_PAGE, page.coerceAtLeast(0)).apply()
+    }
+
+    fun getHomePdfViewMode(): HomePdfViewMode =
+        HomePdfViewMode.fromStorageId(prefs.getString(KEY_HOME_PDF_VIEW_MODE, null))
+
+    fun setHomePdfViewMode(mode: HomePdfViewMode) {
+        prefs.edit().putString(KEY_HOME_PDF_VIEW_MODE, mode.storageId).apply()
+    }
+
+    fun isHomePdfThemeDark(): Boolean = prefs.getBoolean(KEY_HOME_PDF_THEME_DARK, false)
+
+    fun setHomePdfThemeDark(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_HOME_PDF_THEME_DARK, enabled).apply()
+    }
+
+    fun getHomePdfZoomScale(): Float =
+        prefs.getFloat(KEY_HOME_PDF_ZOOM_SCALE, 1f).coerceIn(0.5f, 3f)
+
+    fun setHomePdfZoomScale(scale: Float) {
+        prefs.edit().putFloat(KEY_HOME_PDF_ZOOM_SCALE, scale.coerceIn(0.5f, 3f)).apply()
+    }
+
+    fun getHomeLayoutSectionOrder(): List<HomeLayoutSection> {
+        val raw = prefs.getString(KEY_HOME_LAYOUT_SECTION_ORDER_JSON, null) ?: return HomeLayoutSection.defaultOrder
+        @Suppress("UNCHECKED_CAST")
+        val ids = runCatching {
+            gson.fromJson<ArrayList<String>>(raw, stringListType)
+        }.getOrNull() ?: return HomeLayoutSection.defaultOrder
+        return HomeLayoutSection.normalizeOrder(ids)
+    }
+
+    fun setHomeLayoutSectionOrder(order: List<HomeLayoutSection>) {
+        val normalized = HomeLayoutSection.normalizeOrder(order.map { it.storageId })
+        prefs.edit().putString(
+            KEY_HOME_LAYOUT_SECTION_ORDER_JSON,
+            gson.toJson(ArrayList(normalized.map { it.storageId })),
+        ).apply()
+    }
 }

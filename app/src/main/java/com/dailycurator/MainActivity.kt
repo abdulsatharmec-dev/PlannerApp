@@ -4,9 +4,9 @@ import android.Manifest
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -14,11 +14,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.lifecycleScope
 import com.dailycurator.data.gmail.buildGoogleSignInClient
 import com.dailycurator.data.gmail.processGmailSignInActivityResult
@@ -30,6 +36,7 @@ import com.dailycurator.reminders.TaskReminderScheduler
 import com.dailycurator.ui.GmailLinkActions
 import com.dailycurator.ui.LocalGmailLinkActions
 import com.dailycurator.ui.navigation.AppNavHost
+import com.dailycurator.ui.security.AppLockOverlay
 import com.dailycurator.ui.reminders.TaskReminderBottomSheet
 import com.dailycurator.ui.theme.AppBackgroundOption
 import com.dailycurator.ui.theme.AppDecorBackdrop
@@ -50,7 +57,7 @@ data class MainNavIncoming(
 )
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     private val googleSignInClient by lazy { buildGoogleSignInClient(this) }
 
@@ -64,6 +71,7 @@ class MainActivity : ComponentActivity() {
     private val incomingState = mutableStateOf(MainNavIncoming())
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         gmailSignInLauncher = registerForActivityResult(
             ActivityResultContracts.StartActivityForResult(),
@@ -119,6 +127,20 @@ class MainActivity : ComponentActivity() {
                             ),
                         ) {
                             Box(Modifier.fillMaxSize()) {
+                                val lifecycleOwner = LocalLifecycleOwner.current
+                                var showAppLock by remember { mutableStateOf(false) }
+                                DisposableEffect(lifecycleOwner) {
+                                    val obs = LifecycleEventObserver { _, event ->
+                                        if (event == Lifecycle.Event.ON_STOP &&
+                                            prefs.isAppLockEnabled() &&
+                                            prefs.hasAppLockPin()
+                                        ) {
+                                            showAppLock = true
+                                        }
+                                    }
+                                    lifecycleOwner.lifecycle.addObserver(obs)
+                                    onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+                                }
                                 WallpaperReadableScrim(
                                     wallpaperActive = wallpaperActive,
                                     hasCustomPhoto = customWallpaperUri.isNotBlank(),
@@ -148,6 +170,12 @@ class MainActivity : ComponentActivity() {
                                         },
                                     )
                                 }
+                                AppLockOverlay(
+                                    visible = showAppLock,
+                                    activity = this@MainActivity,
+                                    prefs = prefs,
+                                    onUnlocked = { showAppLock = false },
+                                )
                             }
                         }
                         }

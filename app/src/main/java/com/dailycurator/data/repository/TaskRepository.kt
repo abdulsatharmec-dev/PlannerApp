@@ -8,6 +8,7 @@ import com.dailycurator.data.model.Urgency
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import org.json.JSONArray
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -29,19 +30,37 @@ private fun String.toTaskRepeatOption(): TaskRepeatOption = try {
     TaskRepeatOption.NONE
 }
 
+private fun parseTagsJson(raw: String?): List<String> {
+    val s = raw?.trim().orEmpty()
+    if (s.isEmpty() || s == "[]") return emptyList()
+    return runCatching {
+        val a = JSONArray(s)
+        (0 until a.length()).map { a.getString(it).trim() }.filter { it.isNotEmpty() }.distinct()
+    }.getOrElse { emptyList() }
+}
+
+private fun tagsToJson(tags: List<String>): String {
+    val a = JSONArray()
+    tags.map { it.trim() }.filter { it.isNotEmpty() }.distinct().forEach { a.put(it) }
+    return a.toString()
+}
+
 private fun TaskEntity.toPriorityTask() = PriorityTask(
     id = id, rank = rank, title = title,
     startTime = startTime.toLocalTime(),
     endTime = endTime.toLocalTime(),
     dueInfo = dueInfo, statusNote = statusNote,
     urgency = Urgency.valueOf(urgency),
-    isDone = isDone, isTopFive = isTopFive, isMustDo = isMustDo, displayNumber = displayNumber,
+    isDone = isDone, isTopFive = isTopFive, isMustDo = isMustDo,
+    isCantComplete = isCantComplete,
+    displayNumber = displayNumber,
     goalId = goalId,
     repeatSeriesId = repeatSeriesId,
     repeatOption = repeatOption.toTaskRepeatOption(),
     customRepeatIntervalDays = customRepeatIntervalDays,
     repeatUntilDate = repeatUntilDate.toLocalDateOrNull(),
     date = date.toLocalDate(),
+    tags = parseTagsJson(tags),
 )
 
 private fun PriorityTask.toEntity() = TaskEntity(
@@ -56,6 +75,7 @@ private fun PriorityTask.toEntity() = TaskEntity(
     isDone = isDone,
     isTopFive = isTopFive,
     isMustDo = isMustDo,
+    isCantComplete = isCantComplete,
     displayNumber = displayNumber,
     goalId = goalId,
     repeatSeriesId = repeatSeriesId,
@@ -63,7 +83,7 @@ private fun PriorityTask.toEntity() = TaskEntity(
     customRepeatIntervalDays = customRepeatIntervalDays,
     repeatUntilDate = repeatUntilDate?.format(DATE_FMT),
     date = date.format(DATE_FMT),
-    tags = "[]",
+    tags = tagsToJson(tags),
     location = null,
     isProtected = false,
 )

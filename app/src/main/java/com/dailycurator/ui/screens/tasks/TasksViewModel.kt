@@ -2,6 +2,7 @@ package com.dailycurator.ui.screens.tasks
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.dailycurator.data.local.AppPreferences
 import com.dailycurator.data.model.PriorityTask
 import com.dailycurator.data.model.TaskRepeatOption
 import com.dailycurator.data.model.Urgency
@@ -11,6 +12,7 @@ import com.dailycurator.data.pomodoro.PomodoroNavBridge
 import com.dailycurator.data.repository.GoalRepository
 import com.dailycurator.data.repository.TaskRepository
 import com.dailycurator.reminders.TaskReminderScheduler
+import com.dailycurator.ui.components.TaskTagUi
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -50,12 +52,18 @@ data class TasksUiState(
     val activeGoals: List<WeeklyGoal> = emptyList(),
     /** When false, completed tasks are hidden from the list. */
     val showCompletedTasks: Boolean = false,
-    /** When false, must-do tasks are hidden from the list. */
-    val showMustDoTasks: Boolean = true,
+    /** When false, must-do tasks are hidden from the list (default off; persisted). */
+    val showMustDoTasks: Boolean = false,
+    /** When false, “won’t do” (can’t complete) tasks are hidden (default off; persisted). */
+    val showWontDoTasks: Boolean = false,
+    /** ARGB background per tag label for chips (persisted). */
+    val taskTagColors: Map<String, Int> = emptyMap(),
     /** True when the day has tasks but all are completed and hidden by the filter. */
     val allTasksDoneHidden: Boolean = false,
     /** True when tasks remain after the completed filter but every one is must-do and must-do is hidden. */
     val allMustDoHidden: Boolean = false,
+    /** True when visible undone tasks are all “won’t do” and that filter hides them. */
+    val allWontDoHidden: Boolean = false,
 )
 
 private fun compareTasks(): Comparator<PriorityTask> =
@@ -101,12 +109,12 @@ class TasksViewModel @Inject constructor(
     private val goalRepo: GoalRepository,
     private val pomodoroNavBridge: PomodoroNavBridge,
     private val taskReminderScheduler: TaskReminderScheduler,
+    private val prefs: AppPreferences,
 ) : ViewModel() {
 
     private val listDate = MutableStateFlow(LocalDate.now())
     private val displayMode = MutableStateFlow(TasksDisplayMode.WEEK_CALENDAR)
     private val showCompletedTasks = MutableStateFlow(false)
-    private val showMustDoTasks = MutableStateFlow(true)
     private val activeGoals = goalRepo.getActiveGoals().stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
@@ -116,19 +124,34 @@ class TasksViewModel @Inject constructor(
     val uiState: StateFlow<TasksUiState> = listDate
         .flatMapLatest { date ->
             combine(
-                displayMode,
-                showCompletedTasks,
-                showMustDoTasks,
-                repo.getTasksForDate(date),
+                combine(
+                    displayMode,
+                    showCompletedTasks,
+                    prefs.showMustDoTasksFlow,
+                ) { mode, showDone, showMust ->
+                    Triple(mode, showDone, showMust)
+                },
+                combine(
+                    prefs.showWontDoTasksFlow,
+                    prefs.taskTagColorsFlow,
+                    repo.getTasksForDate(date),
+                ) { showWont, tagColors, tasksForDay ->
+                    Triple(showWont, tagColors, tasksForDay)
+                },
                 activeGoals,
-            ) { mode, showDone, showMust, tasksForDay, goals ->
+            ) { mdm, wtt, goals ->
+                val (mode, showDone, showMust) = mdm
+                val (showWont, tagColors, tasksForDay) = wtt
                 val afterDone = if (!showDone) tasksForDay.filter { !it.isDone } else tasksForDay
-                val sortedDay = (if (!showMust) afterDone.filter { !it.isMustDo } else afterDone)
+                val afterWont = if (!showWont) afterDone.filter { !it.isCantComplete } else afterDone
+                val sortedDay = (if (!showMust) afterWont.filter { !it.isMustDo } else afterWont)
                     .sortedWith(compareTasks())
                 val allDoneHidden =
                     !showDone && tasksForDay.isNotEmpty() && afterDone.isEmpty()
                 val allMustHidden =
-                    !showMust && afterDone.isNotEmpty() && sortedDay.isEmpty()
+                    !showMust && afterWont.isNotEmpty() && sortedDay.isEmpty()
+                val allWontHidden =
+                    !showWont && afterDone.isNotEmpty() && afterWont.isEmpty()
                 TasksUiState(
                     displayMode = mode,
                     listDate = date,
@@ -137,8 +160,11 @@ class TasksViewModel @Inject constructor(
                     activeGoals = goals,
                     showCompletedTasks = showDone,
                     showMustDoTasks = showMust,
+                    showWontDoTasks = showWont,
+                    taskTagColors = tagColors,
                     allTasksDoneHidden = allDoneHidden,
                     allMustDoHidden = allMustHidden,
+                    allWontDoHidden = allWontHidden,
                 )
             }
         }
@@ -161,7 +187,31 @@ class TasksViewModel @Inject constructor(
     }
 
     fun setShowMustDoTasks(show: Boolean) {
-        showMustDoTasks.value = show
+        prefs.setShowMustDoTasksEnabled(show)
+    }
+
+    fun setShowWontDoTasks(show: Boolean) {
+        prefs.setShowWontDoTasksEnabled(show)
+    }
+
+    fun markTaskWontDo(task: PriorityTask) = viewModelScope.launch {
+        taskReminderScheduler.cancel(task.id)
+        repo.update(task.copy(isCantComplete = true))
+    }
+
+    fun clearTaskWontDo(task: PriorityTask) = viewModelScope.launch {
+        repo.update(task.copy(isCantComplete = false))
+        rescheduleTaskReminders(task.id)
+    }
+
+    fun ensureDefaultTaskTagColor(tagName: String) {
+        val k = tagName.trim()
+        if (k.isEmpty() || prefs.getTaskTagColors().containsKey(k)) return
+        prefs.setTaskTagColor(k, TaskTagUi.argbForTag(k, emptyMap()))
+    }
+
+    fun setTaskTagColor(tagName: String, argb: Int) {
+        prefs.setTaskTagColor(tagName, argb)
     }
 
     /** Default “repeat until” end date for the task dialog (last day of the uncapped pattern). */
@@ -183,12 +233,14 @@ class TasksViewModel @Inject constructor(
         urgency: Urgency,
         isTop5: Boolean,
         isMustDo: Boolean,
+        isCantComplete: Boolean,
         displayNumber: Int,
         note: String?,
         goalId: Long?,
         repeat: TaskRepeatOption,
         customRepeatIntervalDays: Int,
         repeatUntilDate: LocalDate?,
+        tags: List<String>,
     ) = viewModelScope.launch {
         val customDays = customRepeatIntervalDays.coerceIn(2, 30)
         val seriesId = if (repeat == TaskRepeatOption.NONE) null else UUID.randomUUID().toString()
@@ -207,6 +259,7 @@ class TasksViewModel @Inject constructor(
                     urgency = urgency,
                     isTopFive = isTop5,
                     isMustDo = isMustDo,
+                    isCantComplete = isCantComplete,
                     displayNumber = displayNumber.coerceIn(0, 999),
                     goalId = goalId,
                     date = d,
@@ -214,6 +267,7 @@ class TasksViewModel @Inject constructor(
                     repeatOption = repeat,
                     customRepeatIntervalDays = customDays,
                     repeatUntilDate = until,
+                    tags = tags,
                 ),
             )
             repo.getById(newId)?.let { taskReminderScheduler.schedule(it) }
@@ -229,12 +283,14 @@ class TasksViewModel @Inject constructor(
         urgency: Urgency,
         isTop5: Boolean,
         isMustDo: Boolean,
+        isCantComplete: Boolean,
         displayNumber: Int,
         note: String?,
         goalId: Long?,
         repeat: TaskRepeatOption,
         customRepeatIntervalDays: Int,
         repeatUntilDate: LocalDate?,
+        tags: List<String>,
     ) = viewModelScope.launch {
         val customDays = customRepeatIntervalDays.coerceIn(2, 30)
         val until = repeatUntilDate?.takeIf { repeat != TaskRepeatOption.NONE }
@@ -252,6 +308,7 @@ class TasksViewModel @Inject constructor(
                     urgency = urgency,
                     isTopFive = isTop5,
                     isMustDo = isMustDo,
+                    isCantComplete = isCantComplete,
                     displayNumber = displayNumber.coerceIn(0, 999),
                     statusNote = note,
                     goalId = goalId,
@@ -259,6 +316,7 @@ class TasksViewModel @Inject constructor(
                     repeatOption = repeat,
                     customRepeatIntervalDays = customDays,
                     repeatUntilDate = until,
+                    tags = tags,
                 )
                 repo.update(merged)
                 rescheduleTaskReminders(merged.id)
@@ -276,6 +334,7 @@ class TasksViewModel @Inject constructor(
                 urgency = urgency,
                 isTopFive = isTop5,
                 isMustDo = isMustDo,
+                isCantComplete = isCantComplete,
                 displayNumber = displayNumber.coerceIn(0, 999),
                 statusNote = note,
                 goalId = goalId,
@@ -283,6 +342,7 @@ class TasksViewModel @Inject constructor(
                 repeatOption = repeat,
                 customRepeatIntervalDays = customDays,
                 repeatUntilDate = until,
+                tags = tags,
             )
             repo.update(detached)
             rescheduleTaskReminders(task.id)
@@ -302,6 +362,7 @@ class TasksViewModel @Inject constructor(
                 urgency = urgency,
                 isTopFive = isTop5,
                 isMustDo = isMustDo,
+                isCantComplete = isCantComplete,
                 displayNumber = displayNumber.coerceIn(0, 999),
                 statusNote = note,
                 goalId = goalId,
@@ -309,6 +370,7 @@ class TasksViewModel @Inject constructor(
                 repeatOption = TaskRepeatOption.NONE,
                 customRepeatIntervalDays = customDays,
                 repeatUntilDate = null,
+                tags = tags,
             )
             repo.update(updated)
             rescheduleTaskReminders(task.id)
@@ -326,6 +388,7 @@ class TasksViewModel @Inject constructor(
             urgency = urgency,
             isTopFive = isTop5,
             isMustDo = isMustDo,
+            isCantComplete = isCantComplete,
             displayNumber = displayNumber.coerceIn(0, 999),
             statusNote = note,
             goalId = goalId,
@@ -333,6 +396,7 @@ class TasksViewModel @Inject constructor(
             repeatOption = repeat,
             customRepeatIntervalDays = customDays,
             repeatUntilDate = until,
+            tags = tags,
         )
         repo.update(anchorUpdated)
         rescheduleTaskReminders(task.id)
@@ -350,6 +414,7 @@ class TasksViewModel @Inject constructor(
                     urgency = urgency,
                     isTopFive = isTop5,
                     isMustDo = isMustDo,
+                    isCantComplete = isCantComplete,
                     displayNumber = displayNumber.coerceIn(0, 999),
                     goalId = goalId,
                     date = d,
@@ -357,6 +422,7 @@ class TasksViewModel @Inject constructor(
                     repeatOption = repeat,
                     customRepeatIntervalDays = customDays,
                     repeatUntilDate = until,
+                    tags = tags,
                 ),
             )
             repo.getById(newId)?.let { taskReminderScheduler.schedule(it) }
@@ -393,6 +459,7 @@ class TasksViewModel @Inject constructor(
                     urgency = withSeries.urgency,
                     isTopFive = withSeries.isTopFive,
                     isMustDo = withSeries.isMustDo,
+                    isCantComplete = withSeries.isCantComplete,
                     displayNumber = withSeries.displayNumber,
                     goalId = withSeries.goalId,
                     date = d,
@@ -400,6 +467,7 @@ class TasksViewModel @Inject constructor(
                     repeatOption = repeat,
                     customRepeatIntervalDays = customDays,
                     repeatUntilDate = repeatUntilDate,
+                    tags = withSeries.tags,
                 ),
             )
             repo.getById(newId)?.let { taskReminderScheduler.schedule(it) }

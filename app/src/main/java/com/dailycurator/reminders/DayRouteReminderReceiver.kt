@@ -9,21 +9,22 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.dailycurator.MainActivity
 import com.dailycurator.data.pomodoro.PomodoroLaunchRequest
-import com.dailycurator.data.pomodoro.PomodoroNavBridge
 import com.dailycurator.data.repository.TaskRepository
+import com.dailycurator.pomodoro.PomodoroTimerController
 import com.dailycurator.pomodoro.ReminderNotificationIds
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @AndroidEntryPoint
 class DayRouteReminderReceiver : BroadcastReceiver() {
 
     @Inject lateinit var taskRepo: TaskRepository
-    @Inject lateinit var pomodoroNavBridge: PomodoroNavBridge
+    @Inject lateinit var pomodoroTimerController: PomodoroTimerController
     @Inject lateinit var taskReminderScheduler: TaskReminderScheduler
     @Inject lateinit var habitReminderScheduler: HabitReminderScheduler
 
@@ -51,15 +52,22 @@ class DayRouteReminderReceiver : BroadcastReceiver() {
                         if (id > 0) {
                             val t = taskRepo.getById(id)
                             if (t != null) {
-                                pomodoroNavBridge.push(
-                                    PomodoroLaunchRequest(
-                                        entityType = PomodoroLaunchRequest.TYPE_TASK,
-                                        entityId = t.id,
-                                        title = t.title,
-                                    ),
+                                val req = PomodoroLaunchRequest(
+                                    entityType = PomodoroLaunchRequest.TYPE_TASK,
+                                    entityId = t.id,
+                                    title = t.title,
                                 )
+                                pomodoroTimerController.applyLaunchFromNotification(req, autoStart = true)
                             }
                             NotificationManagerCompat.from(context).cancel(taskNotifId(id))
+                            withContext(Dispatchers.Main) {
+                                context.startActivity(
+                                    Intent(context, MainActivity::class.java).apply {
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                                        putExtra(MainActivity.EXTRA_OPEN_POMODORO, true)
+                                    },
+                                )
+                            }
                         }
                     }
                     ReminderIntents.ACTION_TASK_DISMISS -> {
