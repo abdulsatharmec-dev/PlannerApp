@@ -22,6 +22,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -76,6 +78,7 @@ fun JournalsScreen(
     val listRows by viewModel.listRows.collectAsState()
     val filterDate by viewModel.filterDate.collectAsState()
     val evergreenOnly by viewModel.evergreenOnly.collectAsState()
+    val listVoicePlayback by viewModel.listVoicePlayback.collectAsState()
     var pendingDelete by remember { mutableStateOf<JournalEntry?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
 
@@ -247,6 +250,9 @@ fun JournalsScreen(
                             onClick = { onOpenEntry(row.entry.id) },
                             onDelete = { pendingDelete = row.entry },
                             onToggleEvergreen = { viewModel.toggleEvergreen(row.entry) },
+                            voicePlaying = listVoicePlayback.entryId == row.entry.id &&
+                                listVoicePlayback.playing,
+                            onVoiceClick = { viewModel.toggleListVoicePlayback(row.entry) },
                         )
                     }
                 }
@@ -273,7 +279,10 @@ private fun JournalListCard(
     onClick: () -> Unit,
     onDelete: () -> Unit,
     onToggleEvergreen: () -> Unit,
+    voicePlaying: Boolean,
+    onVoiceClick: () -> Unit,
 ) {
+    val hasVoice = !entry.voiceRelativePath.isNullOrBlank()
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -337,12 +346,23 @@ private fun JournalListCard(
                         label = { Text("Every day") },
                     )
                 }
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "Delete",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (hasVoice) {
+                        IconButton(onClick = onVoiceClick) {
+                            Icon(
+                                imageVector = if (voicePlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                contentDescription = if (voicePlaying) "Pause voice note" else "Play voice note",
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                    IconButton(onClick = onDelete) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         }

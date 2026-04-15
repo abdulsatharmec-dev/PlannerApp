@@ -22,6 +22,7 @@ private fun JournalEntryEntity.toModel() = JournalEntry(
     includeInAssistantInsight = includeInAssistantInsight,
     includeInWeeklyGoalsInsight = includeInWeeklyGoalsInsight,
     isEvergreen = isEvergreen,
+    voiceRelativePath = voiceRelativePath,
 )
 
 private fun JournalEntry.toEntity() = JournalEntryEntity(
@@ -34,6 +35,7 @@ private fun JournalEntry.toEntity() = JournalEntryEntity(
     includeInAssistantInsight = includeInAssistantInsight,
     includeInWeeklyGoalsInsight = includeInWeeklyGoalsInsight,
     isEvergreen = isEvergreen,
+    voiceRelativePath = voiceRelativePath,
 )
 
 private fun JournalEntry.localDay(zone: ZoneId): LocalDate =

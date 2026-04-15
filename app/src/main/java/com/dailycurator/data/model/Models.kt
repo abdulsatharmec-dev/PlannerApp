@@ -64,6 +64,8 @@ data class JournalEntry(
     val includeInWeeklyGoalsInsight: Boolean = true,
     /** Shown in the “every day” (pinned) section regardless of entry date. */
     val isEvergreen: Boolean = false,
+    /** Path under app files dir for an attached voice note; null if none. */
+    val voiceRelativePath: String? = null,
 )
 
 data class WeeklyGoal(

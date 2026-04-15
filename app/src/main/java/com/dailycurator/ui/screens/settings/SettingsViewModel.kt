@@ -1,11 +1,24 @@
 package com.dailycurator.ui.screens.settings
 
 import android.Manifest
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.asFlow
 import androidx.lifecycle.viewModelScope
+import androidx.work.Constraints
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import com.dailycurator.backup.AppBackupCoordinator
+import com.dailycurator.backup.BackupStateStore
+import com.dailycurator.backup.BackupSyncWorker
+import com.dailycurator.backup.MANUAL_DRIVE_BACKUP_UNIQUE_WORK
 import com.dailycurator.data.gmail.GmailLinkedAccountPref
 import com.dailycurator.data.gmail.GmailTokenProvider
 import com.dailycurator.data.gmail.GmailTokenResult
@@ -24,16 +37,18 @@ import com.dailycurator.security.AppPinHasher
 import com.dailycurator.ui.theme.AppThemePalette
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.dailycurator.R
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import android.os.Build
 import android.provider.MediaStore
 import android.content.ContentUris
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalTime
 import javax.inject.Inject
@@ -43,8 +58,115 @@ class SettingsViewModel @Inject constructor(
     private val prefs: AppPreferences,
     private val gmailTokenProvider: GmailTokenProvider,
     private val youtubePlaylistVideoIdsFetcher: YoutubePlaylistVideoIdsFetcher,
+    private val backupCoordinator: AppBackupCoordinator,
+    private val backupState: BackupStateStore,
     @param:ApplicationContext private val appContext: Context,
 ) : ViewModel() {
+
+    data class BackupDriveUiState(
+        val lastUploadMillis: Long,
+        val lastMessage: String?,
+    )
+
+    private val _backupDriveUi = MutableStateFlow(
+        BackupDriveUiState(backupState.lastSuccessMillis(), backupState.lastError()),
+    )
+    val backupDriveUi = _backupDriveUi.asStateFlow()
+
+    private val _manualDriveWorkStatus = MutableStateFlow("")
+    val manualDriveWorkStatus: StateFlow<String> = _manualDriveWorkStatus.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            WorkManager.getInstance(appContext)
+                .getWorkInfosForUniqueWorkLiveData(MANUAL_DRIVE_BACKUP_UNIQUE_WORK)
+                .asFlow()
+                .distinctUntilChanged()
+                .collect { list ->
+                    val w = list.firstOrNull()
+                    _manualDriveWorkStatus.value = describeManualDriveWork(w)
+                    if (w?.state == WorkInfo.State.SUCCEEDED || w?.state == WorkInfo.State.FAILED) {
+                        refreshBackupDriveUi()
+                    }
+                }
+        }
+    }
+
+    fun refreshBackupDriveUi() {
+        _backupDriveUi.value = BackupDriveUiState(backupState.lastSuccessMillis(), backupState.lastError())
+    }
+
+    private fun describeManualDriveWork(w: WorkInfo?): String {
+        if (w == null) return ""
+        return when (w.state) {
+            WorkInfo.State.ENQUEUED -> appContext.getString(R.string.backup_wm_enqueued)
+            WorkInfo.State.RUNNING -> appContext.getString(R.string.backup_wm_running)
+            WorkInfo.State.SUCCEEDED -> appContext.getString(R.string.backup_wm_succeeded)
+            WorkInfo.State.FAILED -> {
+                val msg = w.outputData.getString(BackupSyncWorker.KEY_ERROR_MESSAGE)
+                appContext.getString(R.string.backup_wm_failed, msg ?: w.state.name)
+            }
+            WorkInfo.State.BLOCKED -> appContext.getString(R.string.backup_wm_blocked)
+            WorkInfo.State.CANCELLED -> appContext.getString(R.string.backup_wm_cancelled)
+        }
+    }
+
+    fun suggestedBackupFileName(): String = backupCoordinator.suggestedBackupZipFileName()
+
+    fun enqueueDriveBackupNow() {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+        val req = OneTimeWorkRequestBuilder<BackupSyncWorker>()
+            .setConstraints(constraints)
+            .build()
+        WorkManager.getInstance(appContext).enqueueUniqueWork(
+            MANUAL_DRIVE_BACKUP_UNIQUE_WORK,
+            ExistingWorkPolicy.REPLACE,
+            req,
+        )
+    }
+
+    fun exportBackupToUri(uri: Uri, onFinished: (Boolean, String?) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val zip = backupCoordinator.buildExportZipToCache()
+                appContext.contentResolver.openOutputStream(uri)?.use { out ->
+                    zip.inputStream().use { input -> input.copyTo(out) }
+                } ?: throw IllegalStateException("Could not open save location")
+                zip.delete()
+                withContext(Dispatchers.Main) { onFinished(true, null) }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { onFinished(false, e.message) }
+            }
+        }
+    }
+
+    suspend fun prepareShareBackupIntent(): Intent =
+        withContext(Dispatchers.IO) {
+            val zip = backupCoordinator.buildExportZipToCache()
+            val uri = FileProvider.getUriForFile(
+                appContext,
+                "${appContext.packageName}.fileprovider",
+                zip,
+            )
+            Intent(Intent.ACTION_SEND).apply {
+                type = "application/zip"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                clipData = ClipData.newUri(appContext.contentResolver, "DayRoute backup", uri)
+            }
+        }
+
+    fun restoreFromBackupUri(uri: Uri, onError: (String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                backupCoordinator.restoreFromContentUri(uri)
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { onError(e.message ?: "Restore failed") }
+            }
+        }
+    }
 
     val isDarkTheme: StateFlow<Boolean> = prefs.darkThemeFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.isDarkTheme())

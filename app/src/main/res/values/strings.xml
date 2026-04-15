@@ -15,4 +15,24 @@
     <string name="morning_playback_action_resume">Resume</string>
     <!-- Web application OAuth client ID (not Android client). Required for reliable Gmail scope consent; pair with Android OAuth client using the same project and your debug/release SHA-1. -->
     <string name="default_web_client_id">REPLACE_WITH_WEB_CLIENT_ID</string>
+    <string name="backup_section_title">Backup and restore</string>
+    <string name="backup_last_upload">Last Google Drive upload</string>
+    <string name="backup_never">Never</string>
+    <string name="backup_status">Drive status</string>
+    <string name="backup_save_copy">Save copy…</string>
+    <string name="backup_share">Share backup…</string>
+    <string name="backup_upload_drive">Back up to Drive now</string>
+    <string name="backup_restore">Restore from backup…</string>
+    <string name="backup_saved">Backup saved</string>
+    <string name="backup_export_failed">Could not export backup</string>
+    <string name="backup_auto_hint">About once per day, when you are online (Wi‑Fi or mobile data) and signed in with the same Google account used for Gmail in this app, a full backup is uploaded to Drive.</string>
+    <string name="backup_wm_enqueued">Drive backup: waiting in queue (needs internet or a free background slot).</string>
+    <string name="backup_wm_running">Drive backup: creating archive and uploading…</string>
+    <string name="backup_wm_succeeded">Drive backup: finished successfully.</string>
+    <string name="backup_wm_failed">Drive backup failed: %1$s</string>
+    <string name="backup_wm_blocked">Drive backup is blocked (often by battery saver or background limits). Try again after loosening restrictions for this app.</string>
+    <string name="backup_wm_cancelled">Drive backup was cancelled.</string>
+    <string name="backup_restore_title">Restore from backup?</string>
+    <string name="backup_restore_message">This replaces all data on this device with the backup file (database, settings, journal voice clips). The app will close and reopen.</string>
+    <string name="backup_restore_confirm">Restore</string>
 </resources>

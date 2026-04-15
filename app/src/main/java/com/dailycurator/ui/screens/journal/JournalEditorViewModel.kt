@@ -1,11 +1,13 @@
 package com.dailycurator.ui.screens.journal
 
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dailycurator.data.model.JournalEntry
 import com.dailycurator.data.repository.JournalRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,6 +17,7 @@ import javax.inject.Inject
 @HiltViewModel
 class JournalEditorViewModel @Inject constructor(
     private val repo: JournalRepository,
+    @ApplicationContext private val appContext: Context,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -41,7 +44,12 @@ class JournalEditorViewModel @Inject constructor(
     private val _ready = MutableStateFlow(false)
     val ready: StateFlow<Boolean> = _ready.asStateFlow()
 
+    private val _voiceRelativePath = MutableStateFlow<String?>(null)
+    val voiceRelativePath: StateFlow<String?> = _voiceRelativePath.asStateFlow()
+
     val isNewEntry: Boolean get() = entryId == 0L
+
+    private var saveCommitted = false
 
     init {
         viewModelScope.launch {
@@ -53,10 +61,25 @@ class JournalEditorViewModel @Inject constructor(
                     _includeInAssistantInsight.value = it.includeInAssistantInsight
                     _includeInWeeklyGoalsInsight.value = it.includeInWeeklyGoalsInsight
                     _isEvergreen.value = it.isEvergreen
+                    _voiceRelativePath.value = it.voiceRelativePath
                 }
             }
             _ready.value = true
         }
+    }
+
+    /** After a successful recording, attach the new file and remove any previous attachment file. */
+    fun replaceVoiceAttachment(relativePath: String) {
+        val old = _voiceRelativePath.value
+        if (old != null && old != relativePath) {
+            JournalVoiceFiles.deleteIfExists(appContext, old)
+        }
+        _voiceRelativePath.value = relativePath
+    }
+
+    fun clearVoiceAttachment() {
+        JournalVoiceFiles.deleteIfExists(appContext, _voiceRelativePath.value)
+        _voiceRelativePath.value = null
     }
 
     fun setTitle(value: String) {
@@ -98,8 +121,10 @@ class JournalEditorViewModel @Inject constructor(
                     includeInAssistantInsight = _includeInAssistantInsight.value,
                     includeInWeeklyGoalsInsight = _includeInWeeklyGoalsInsight.value,
                     isEvergreen = _isEvergreen.value,
+                    voiceRelativePath = _voiceRelativePath.value,
                 ),
             )
+            saveCommitted = true
         } else {
             val existing = repo.getById(entryId) ?: return@launch
             repo.update(
@@ -111,8 +136,10 @@ class JournalEditorViewModel @Inject constructor(
                     includeInAssistantInsight = _includeInAssistantInsight.value,
                     includeInWeeklyGoalsInsight = _includeInWeeklyGoalsInsight.value,
                     isEvergreen = _isEvergreen.value,
+                    voiceRelativePath = _voiceRelativePath.value,
                 ),
             )
+            saveCommitted = true
         }
         onDone()
     }
@@ -120,7 +147,16 @@ class JournalEditorViewModel @Inject constructor(
     fun delete(onDone: () -> Unit) = viewModelScope.launch {
         if (entryId == 0L) return@launch
         val existing = repo.getById(entryId) ?: return@launch
+        JournalVoiceFiles.deleteIfExists(appContext, existing.voiceRelativePath)
         repo.delete(existing)
+        saveCommitted = true
         onDone()
+    }
+
+    override fun onCleared() {
+        if (isNewEntry && !saveCommitted) {
+            JournalVoiceFiles.deleteIfExists(appContext, _voiceRelativePath.value)
+        }
+        super.onCleared()
     }
 }

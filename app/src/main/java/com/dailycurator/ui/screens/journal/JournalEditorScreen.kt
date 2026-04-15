@@ -1,5 +1,12 @@
 package com.dailycurator.ui.screens.journal
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.media.MediaPlayer
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +21,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -32,6 +41,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +50,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -62,6 +79,70 @@ fun JournalEditorScreen(
     val includeAssistant by viewModel.includeInAssistantInsight.collectAsState()
     val includeWeekly by viewModel.includeInWeeklyGoalsInsight.collectAsState()
     val isEvergreenEntry by viewModel.isEvergreen.collectAsState()
+    val voicePath by viewModel.voiceRelativePath.collectAsState()
+    val context = LocalContext.current
+    var showVoiceRecordDialog by remember { mutableStateOf(false) }
+    var editorVoicePlaying by remember { mutableStateOf(false) }
+    val voicePlayer = remember { MediaPlayer() }
+
+    val recordMicLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            showVoiceRecordDialog = true
+        } else {
+            Toast.makeText(
+                context,
+                "Microphone permission is required to record.",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
+
+    fun requestOpenVoiceRecorder() {
+        when {
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.RECORD_AUDIO,
+            ) == PackageManager.PERMISSION_GRANTED -> showVoiceRecordDialog = true
+            else -> recordMicLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            try {
+                if (voicePlayer.isPlaying) voicePlayer.stop()
+                voicePlayer.reset()
+                voicePlayer.release()
+            } catch (_: Throwable) {
+            }
+        }
+    }
+
+    LaunchedEffect(voicePath) {
+        try {
+            if (voicePlayer.isPlaying) voicePlayer.stop()
+            voicePlayer.reset()
+        } catch (_: Throwable) {
+        }
+        editorVoicePlaying = false
+        val p = voicePath?.trim().orEmpty()
+        if (p.isNotEmpty()) {
+            val f = JournalVoiceFiles.absoluteFile(context, p)
+            if (f.exists()) {
+                try {
+                    voicePlayer.setDataSource(f.absolutePath)
+                    voicePlayer.prepare()
+                    voicePlayer.setOnCompletionListener {
+                        editorVoicePlaying = false
+                    }
+                } catch (_: Throwable) {
+                }
+            }
+        }
+    }
+
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var validationError by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
@@ -129,11 +210,12 @@ fun JournalEditorScreen(
         )
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        containerColor = Color.Transparent,
-        topBar = {
-            TopAppBar(
+    Box(Modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = Color.Transparent,
+            topBar = {
+                TopAppBar(
                 title = {
                     Text(
                         if (viewModel.isNewEntry) "Today" else "Entry",
@@ -146,9 +228,31 @@ fun JournalEditorScreen(
                     }
                 },
                 actions = {
+                    if (!voicePath.isNullOrBlank()) {
+                        IconButton(
+                            onClick = {
+                                try {
+                                    if (editorVoicePlaying) {
+                                        voicePlayer.pause()
+                                        editorVoicePlaying = false
+                                    } else {
+                                        voicePlayer.start()
+                                        editorVoicePlaying = true
+                                    }
+                                } catch (_: Throwable) {
+                                    Toast.makeText(context, "Could not play recording.", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                        ) {
+                            Icon(
+                                imageVector = if (editorVoicePlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                contentDescription = if (editorVoicePlaying) "Pause voice" else "Play voice",
+                            )
+                        }
+                    }
                     Box {
                         IconButton(onClick = { menuExpanded = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                            Icon(Icons.Filled.MoreVert, contentDescription = "More options")
                         }
                         DropdownMenu(
                             expanded = menuExpanded,
@@ -161,6 +265,28 @@ fun JournalEditorScreen(
                                     showAiSettings = true
                                 },
                             )
+                            DropdownMenuItem(
+                                text = { Text("Record voice…") },
+                                onClick = {
+                                    menuExpanded = false
+                                    requestOpenVoiceRecorder()
+                                },
+                            )
+                            if (!voicePath.isNullOrBlank()) {
+                                DropdownMenuItem(
+                                    text = { Text("Remove voice recording") },
+                                    onClick = {
+                                        menuExpanded = false
+                                        try {
+                                            if (voicePlayer.isPlaying) voicePlayer.stop()
+                                            voicePlayer.reset()
+                                        } catch (_: Throwable) {
+                                        }
+                                        editorVoicePlaying = false
+                                        viewModel.clearVoiceAttachment()
+                                    },
+                                )
+                            }
                             if (!viewModel.isNewEntry) {
                                 HorizontalDivider()
                                 DropdownMenuItem(
@@ -175,7 +301,8 @@ fun JournalEditorScreen(
                     }
                     TextButton(
                         onClick = {
-                            if (title.trim().isEmpty() && body.isBlank()) {
+                            val hasVoiceAfterStop = !viewModel.voiceRelativePath.value.isNullOrBlank()
+                            if (title.trim().isEmpty() && body.isBlank() && !hasVoiceAfterStop) {
                                 validationError = true
                                 return@TextButton
                             }
@@ -202,7 +329,8 @@ fun JournalEditorScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 8.dp, bottom = 8.dp),
             ) {
                 Text(
                     dateLine,
@@ -235,7 +363,7 @@ fun JournalEditorScreen(
                         isError = validationError,
                         supportingText = {
                             if (validationError) {
-                                Text("Add a title or write something in your entry.")
+                                Text("Add a title, write something, or attach a voice note.")
                             }
                         },
                         shape = RoundedCornerShape(16.dp),
@@ -275,6 +403,29 @@ fun JournalEditorScreen(
                         ),
                     )
                 }
+            }
+        }
+    }
+
+        if (showVoiceRecordDialog) {
+            BackHandler { showVoiceRecordDialog = false }
+            val yOffsetPx = with(LocalDensity.current) { 80.dp.roundToPx() }
+            Popup(
+                alignment = Alignment.TopCenter,
+                offset = IntOffset(0, yOffsetPx),
+                properties = PopupProperties(
+                    focusable = false,
+                    dismissOnBackPress = false,
+                    clippingEnabled = true,
+                ),
+            ) {
+                JournalVoiceRecordOverlay(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp),
+                    onDismissRequest = { showVoiceRecordDialog = false },
+                    onSaved = { rel -> viewModel.replaceVoiceAttachment(rel) },
+                )
             }
         }
     }

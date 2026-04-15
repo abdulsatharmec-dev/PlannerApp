@@ -128,7 +128,9 @@ class MainActivity : FragmentActivity() {
                         ) {
                             Box(Modifier.fillMaxSize()) {
                                 val lifecycleOwner = LocalLifecycleOwner.current
-                                var showAppLock by remember { mutableStateOf(false) }
+                                var showAppLock by remember {
+                                    mutableStateOf(prefs.isAppLockEnabled() && prefs.hasAppLockPin())
+                                }
                                 DisposableEffect(lifecycleOwner) {
                                     val obs = LifecycleEventObserver { _, event ->
                                         if (event == Lifecycle.Event.ON_STOP &&

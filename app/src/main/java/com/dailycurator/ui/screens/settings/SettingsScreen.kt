@@ -39,7 +39,11 @@ import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -60,6 +64,7 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -88,8 +93,11 @@ import com.dailycurator.ui.LocalGmailLinkActions
 import com.dailycurator.ui.theme.AppBackgroundOption
 import com.dailycurator.ui.theme.AppThemePalette
 import com.dailycurator.ui.theme.appScreenBackground
+import java.text.DateFormat
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.util.Date
+import kotlinx.coroutines.launch
 
 private val sectionGap = 12.dp
 private val horizontalPad = 20.dp
@@ -143,6 +151,8 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val appLockEnabled by viewModel.appLockEnabled.collectAsState()
     val appLockAllowBiometric by viewModel.appLockAllowBiometric.collectAsState()
     val appLockPinConfigured by viewModel.appLockPinConfigured.collectAsState()
+    val backupDriveUi by viewModel.backupDriveUi.collectAsState()
+    val manualDriveWorkStatus by viewModel.manualDriveWorkStatus.collectAsState()
 
     var showLlmKeysDialog by remember { mutableStateOf(false) }
     var showAssistantPromptDialog by remember { mutableStateOf(false) }
@@ -157,8 +167,11 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     var morningSettingsBucket by remember { mutableStateOf(MorningVideoBucket.MOTIVATION) }
     var morningPlaylistEditBucket by remember { mutableStateOf(MorningVideoBucket.MOTIVATION) }
     var appLockPinSheet by remember { mutableStateOf<AppLockPinSheet>(AppLockPinSheet.None) }
+    var showRestoreBackupConfirm by remember { mutableStateOf(false) }
+    var pendingRestoreBackupUri by remember { mutableStateOf<Uri?>(null) }
 
     val context = LocalContext.current
+    val composeScope = rememberCoroutineScope()
     val gmailLinkActions = LocalGmailLinkActions.current
 
     val pickWallpaperLauncher = rememberLauncherForActivityResult(
@@ -174,6 +187,34 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 // Some providers still allow read without persistable permission.
             }
             viewModel.setCustomWallpaperUri(uri.toString())
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.refreshBackupDriveUi()
+    }
+
+    val saveBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip"),
+    ) { uri ->
+        if (uri != null) {
+            viewModel.exportBackupToUri(uri) { ok, err ->
+                Toast.makeText(
+                    context,
+                    if (ok) context.getString(R.string.backup_saved) else (err ?: context.getString(R.string.backup_export_failed)),
+                    Toast.LENGTH_LONG,
+                ).show()
+                viewModel.refreshBackupDriveUi()
+            }
+        }
+    }
+
+    val pickRestoreBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            pendingRestoreBackupUri = uri
+            showRestoreBackupConfirm = true
         }
     }
 
@@ -412,6 +453,42 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             onSave = {
                 viewModel.persistPhoneUsageInsightPrompt(it)
                 showPhoneUsagePromptDialog = false
+            },
+        )
+    }
+
+    if (showRestoreBackupConfirm && pendingRestoreBackupUri != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showRestoreBackupConfirm = false
+                pendingRestoreBackupUri = null
+            },
+            title = { Text(stringResource(R.string.backup_restore_title)) },
+            text = { Text(stringResource(R.string.backup_restore_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val u = pendingRestoreBackupUri!!
+                        showRestoreBackupConfirm = false
+                        pendingRestoreBackupUri = null
+                        viewModel.restoreFromBackupUri(u) { msg ->
+                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                        }
+                    },
+                ) {
+                    Text(
+                        stringResource(R.string.backup_restore_confirm),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showRestoreBackupConfirm = false
+                        pendingRestoreBackupUri = null
+                    },
+                ) { Text(stringResource(android.R.string.cancel)) }
             },
         )
     }
@@ -1181,6 +1258,116 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                     subtitle = "Used after chats and for planner-based updates",
                     onClick = { showMemoryExtractionPromptDialog = true },
                 )
+            }
+        }
+
+        item {
+            SettingsSection(title = stringResource(R.string.backup_section_title)) {
+                val lastUploadLabel = if (backupDriveUi.lastUploadMillis > 0L) {
+                    DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(
+                        Date(backupDriveUi.lastUploadMillis),
+                    )
+                } else {
+                    stringResource(R.string.backup_never)
+                }
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.CloudUpload,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp),
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                stringResource(R.string.backup_last_upload),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(lastUploadLabel, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                    backupDriveUi.lastMessage?.let { msg ->
+                        Text(
+                            "${stringResource(R.string.backup_status)}: $msg",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        stringResource(R.string.backup_auto_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                OutlinedButton(
+                    onClick = {
+                        saveBackupLauncher.launch(viewModel.suggestedBackupFileName())
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                ) {
+                    Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.backup_save_copy))
+                }
+                OutlinedButton(
+                    onClick = {
+                        composeScope.launch {
+                            try {
+                                val send = viewModel.prepareShareBackupIntent()
+                                val chooserTitle = context.getString(R.string.backup_share)
+                                context.startActivity(Intent.createChooser(send, chooserTitle))
+                            } catch (e: Exception) {
+                                Toast.makeText(
+                                    context,
+                                    e.message ?: context.getString(R.string.backup_export_failed),
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                ) {
+                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.backup_share))
+                }
+                OutlinedButton(
+                    onClick = { viewModel.enqueueDriveBackupNow() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                ) {
+                    Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.backup_upload_drive))
+                }
+                if (manualDriveWorkStatus.isNotBlank()) {
+                    Text(
+                        manualDriveWorkStatus,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
+                }
+                OutlinedButton(
+                    onClick = { pickRestoreBackupLauncher.launch(arrayOf("application/zip")) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                ) {
+                    Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.backup_restore))
+                }
             }
         }
 

@@ -16,4 +16,6 @@ data class JournalEntryEntity(
     val includeInWeeklyGoalsInsight: Boolean = true,
     /** Affirmations / reminders: listed on every day in the journal browser. */
     val isEvergreen: Boolean = false,
+    /** Path under app files dir, e.g. `journal_voice/<uuid>.m4a`; null if no recording. */
+    val voiceRelativePath: String? = null,
 )

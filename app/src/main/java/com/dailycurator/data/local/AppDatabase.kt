@@ -36,7 +36,7 @@ import java.time.format.DateTimeFormatter
         CachedInsightEntity::class, JournalEntryEntity::class, HabitLogEntity::class,
         PomodoroSessionEntity::class, AgentMemoryEntity::class,
     ],
-    version = 20,
+    version = 21,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -216,6 +216,12 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_20_21 = object : Migration(20, 21) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE journal_entries ADD COLUMN voiceRelativePath TEXT")
+            }
+        }
+
         private val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE habits ADD COLUMN seriesId TEXT NOT NULL DEFAULT ''")
@@ -270,6 +276,14 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Close and drop the singleton so a new DB file can replace [Context.getDatabasePath]. */
+        fun destroyInstance() {
+            synchronized(this) {
+                INSTANCE?.close()
+                INSTANCE = null
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 Room.databaseBuilder(context, AppDatabase::class.java, "daily_curator.db")
@@ -291,6 +305,7 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_17_18,
                         MIGRATION_18_19,
                         MIGRATION_19_20,
+                        MIGRATION_20_21,
                     )
                     .fallbackToDestructiveMigration()
                     .addCallback(object : Callback() {
