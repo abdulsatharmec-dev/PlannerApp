@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
+import android.media.RingtoneManager
 import android.net.Uri
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
@@ -19,6 +20,8 @@ import com.dailycurator.backup.AppBackupCoordinator
 import com.dailycurator.backup.BackupStateStore
 import com.dailycurator.backup.BackupSyncWorker
 import com.dailycurator.backup.MANUAL_DRIVE_BACKUP_UNIQUE_WORK
+import com.dailycurator.pomodoro.AppNotificationChannels
+import com.dailycurator.notifications.AlertToneKind
 import com.dailycurator.data.gmail.GmailLinkedAccountPref
 import com.dailycurator.data.gmail.GmailTokenProvider
 import com.dailycurator.data.gmail.GmailTokenResult
@@ -60,6 +63,7 @@ class SettingsViewModel @Inject constructor(
     private val youtubePlaylistVideoIdsFetcher: YoutubePlaylistVideoIdsFetcher,
     private val backupCoordinator: AppBackupCoordinator,
     private val backupState: BackupStateStore,
+    private val notificationChannels: AppNotificationChannels,
     @param:ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
@@ -167,6 +171,102 @@ class SettingsViewModel @Inject constructor(
             }
         }
     }
+
+    val reminderToneKind: StateFlow<AlertToneKind> = prefs.reminderToneKindFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.getReminderToneKind())
+
+    val reminderCustomToneUri: StateFlow<String> = prefs.reminderCustomToneUriFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.getReminderCustomToneUriString())
+
+    val pomodoroToneKind: StateFlow<AlertToneKind> = prefs.pomodoroToneKindFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.getPomodoroToneKind())
+
+    val pomodoroCustomToneUri: StateFlow<String> = prefs.pomodoroCustomToneUriFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.getPomodoroCustomToneUriString())
+
+    fun setReminderToneKind(kind: AlertToneKind) {
+        prefs.setReminderToneKind(kind)
+        notificationChannels.ensureAll()
+    }
+
+    fun setPomodoroToneKind(kind: AlertToneKind) {
+        prefs.setPomodoroToneKind(kind)
+        notificationChannels.ensureAll()
+    }
+
+    fun setReminderCustomToneUri(uri: Uri?) {
+        if (uri == null) {
+            prefs.setReminderCustomToneUriString("")
+        } else {
+            prefs.setReminderToneKind(AlertToneKind.CUSTOM)
+            prefs.setReminderCustomToneUriString(uri.toString())
+        }
+        notificationChannels.ensureAll()
+    }
+
+    fun setPomodoroCustomToneUri(uri: Uri?) {
+        if (uri == null) {
+            prefs.setPomodoroCustomToneUriString("")
+        } else {
+            prefs.setPomodoroToneKind(AlertToneKind.CUSTOM)
+            prefs.setPomodoroCustomToneUriString(uri.toString())
+        }
+        notificationChannels.ensureAll()
+    }
+
+    fun clearReminderCustomToneToDefault() {
+        prefs.setReminderToneKind(AlertToneKind.DEFAULT_NOTIFICATION)
+        prefs.setReminderCustomToneUriString("")
+        notificationChannels.ensureAll()
+    }
+
+    fun clearPomodoroCustomToneToDefault() {
+        prefs.setPomodoroToneKind(AlertToneKind.DEFAULT_NOTIFICATION)
+        prefs.setPomodoroCustomToneUriString("")
+        notificationChannels.ensureAll()
+    }
+
+    fun applyReminderRingtonePicked(uri: Uri?) {
+        if (uri == null) return
+        prefs.setReminderToneKind(AlertToneKind.CUSTOM)
+        prefs.setReminderCustomToneUriString(uri.toString())
+        notificationChannels.ensureAll()
+    }
+
+    fun applyPomodoroRingtonePicked(uri: Uri?) {
+        if (uri == null) return
+        prefs.setPomodoroToneKind(AlertToneKind.CUSTOM)
+        prefs.setPomodoroCustomToneUriString(uri.toString())
+        notificationChannels.ensureAll()
+    }
+
+    fun buildReminderRingtonePickerIntent(): Intent =
+        Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALL)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, appContext.getString(R.string.tone_picker_reminder_title))
+            if (prefs.getReminderToneKind() == AlertToneKind.CUSTOM) {
+                val u = prefs.getReminderCustomToneUriString().trim()
+                if (u.isNotEmpty()) {
+                    putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, Uri.parse(u))
+                }
+            }
+        }
+
+    fun buildPomodoroRingtonePickerIntent(): Intent =
+        Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALL)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, appContext.getString(R.string.tone_picker_pomodoro_title))
+            if (prefs.getPomodoroToneKind() == AlertToneKind.CUSTOM) {
+                val u = prefs.getPomodoroCustomToneUriString().trim()
+                if (u.isNotEmpty()) {
+                    putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, Uri.parse(u))
+                }
+            }
+        }
 
     val isDarkTheme: StateFlow<Boolean> = prefs.darkThemeFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), prefs.isDarkTheme())

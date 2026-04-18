@@ -8,6 +8,7 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.content.ContextCompat
 import com.dailycurator.di.ApplicationScope
+import com.dailycurator.data.local.AppPreferences
 import com.dailycurator.data.local.entity.PomodoroSessionEntity
 import com.dailycurator.data.pomodoro.PomodoroLaunchRequest
 import com.dailycurator.data.pomodoro.PomodoroNavBridge
@@ -34,6 +35,7 @@ class PomodoroTimerController @Inject constructor(
     @ApplicationScope private val scope: CoroutineScope,
     private val repo: PomodoroRepository,
     private val bridge: PomodoroNavBridge,
+    private val prefs: AppPreferences,
 ) {
     private val nm = ContextCompat.getSystemService(appContext, NotificationManager::class.java)!!
 
@@ -324,23 +326,22 @@ class PomodoroTimerController @Inject constructor(
             },
             android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE,
         )
-        val notif = androidx.core.app.NotificationCompat.Builder(
-            appContext,
-            PomodoroNotificationIds.COMPLETE_CHANNEL_ID,
-        )
+        val channelId = prefs.pomodoroCompleteNotificationChannelId()
+        val b = androidx.core.app.NotificationCompat.Builder(appContext, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("Pomodoro complete")
             .setContentText(title)
             .setContentIntent(open)
             .setAutoCancel(true)
             .setCategory(androidx.core.app.NotificationCompat.CATEGORY_EVENT)
-            .setDefaults(
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            b.setDefaults(
                 androidx.core.app.NotificationCompat.DEFAULT_SOUND or
                     androidx.core.app.NotificationCompat.DEFAULT_VIBRATE,
             )
-            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
-            .build()
-        nm.notify(7102, notif)
+        }
+        nm.notify(7102, b.build())
     }
 
     companion object {

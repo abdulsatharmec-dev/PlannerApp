@@ -1,11 +1,20 @@
 package com.dailycurator.ui.screens.settings
 
+import android.app.Activity
 import android.content.Intent
+import android.media.RingtoneManager
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -32,6 +41,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AddLink
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Info
@@ -42,6 +52,7 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -74,6 +85,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -84,6 +96,7 @@ import androidx.compose.ui.unit.dp
 import android.net.Uri
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.dailycurator.R
+import com.dailycurator.notifications.AlertToneKind
 import com.dailycurator.data.ai.AiPromptDefaults
 import com.dailycurator.data.local.ChatFontSizeCategory
 import com.dailycurator.data.media.MorningPlaylistPref
@@ -98,6 +111,20 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Date
 import kotlinx.coroutines.launch
+
+private fun ringtonePickedUri(data: Intent?): Uri? {
+    val intent = data ?: return null
+    return if (Build.VERSION.SDK_INT >= 33) {
+        intent.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI, Uri::class.java)
+    } else {
+        @Suppress("DEPRECATION")
+        intent.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+    }
+}
+
+private enum class RingtonePickerSlot { Reminder, Pomodoro }
+
+private enum class ToneAudioPickSlot { Reminder, Pomodoro }
 
 private val sectionGap = 12.dp
 private val horizontalPad = 20.dp
@@ -153,6 +180,10 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val appLockPinConfigured by viewModel.appLockPinConfigured.collectAsState()
     val backupDriveUi by viewModel.backupDriveUi.collectAsState()
     val manualDriveWorkStatus by viewModel.manualDriveWorkStatus.collectAsState()
+    val reminderToneKind by viewModel.reminderToneKind.collectAsState()
+    val reminderCustomToneUri by viewModel.reminderCustomToneUri.collectAsState()
+    val pomodoroToneKind by viewModel.pomodoroToneKind.collectAsState()
+    val pomodoroCustomToneUri by viewModel.pomodoroCustomToneUri.collectAsState()
 
     var showLlmKeysDialog by remember { mutableStateOf(false) }
     var showAssistantPromptDialog by remember { mutableStateOf(false) }
@@ -230,6 +261,42 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             } catch (_: SecurityException) {
             }
             viewModel.setHomeDailyPdfUri(uri.toString())
+        }
+    }
+
+    var ringtonePickerSlot by remember { mutableStateOf<RingtonePickerSlot?>(null) }
+    val ringtonePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val slot = ringtonePickerSlot
+        ringtonePickerSlot = null
+        if (slot == null) return@rememberLauncherForActivityResult
+        if (result.resultCode == Activity.RESULT_OK) {
+            val uri = ringtonePickedUri(result.data)
+            when (slot) {
+                RingtonePickerSlot.Reminder -> viewModel.applyReminderRingtonePicked(uri)
+                RingtonePickerSlot.Pomodoro -> viewModel.applyPomodoroRingtonePicked(uri)
+            }
+        }
+    }
+
+    var toneAudioPickSlot by remember { mutableStateOf<ToneAudioPickSlot?>(null) }
+    val pickToneAudioLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        val slot = toneAudioPickSlot
+        toneAudioPickSlot = null
+        if (uri == null || slot == null) return@rememberLauncherForActivityResult
+        try {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+        } catch (_: SecurityException) {
+        }
+        when (slot) {
+            ToneAudioPickSlot.Reminder -> viewModel.setReminderCustomToneUri(uri)
+            ToneAudioPickSlot.Pomodoro -> viewModel.setPomodoroCustomToneUri(uri)
         }
     }
 
@@ -604,6 +671,62 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                             }
                         }
                     }
+                }
+            }
+        }
+
+        item {
+            SettingsSection(title = stringResource(R.string.alert_sound_section_title)) {
+                Column(
+                    Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.NotificationsActive,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp),
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            stringResource(R.string.alert_sound_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    NotificationToneSlot(
+                        title = stringResource(R.string.alert_sound_reminders_title),
+                        toneKind = reminderToneKind,
+                        customUri = reminderCustomToneUri,
+                        onToneKind = { viewModel.setReminderToneKind(it) },
+                        onBrowseSystem = {
+                            ringtonePickerSlot = RingtonePickerSlot.Reminder
+                            ringtonePickerLauncher.launch(viewModel.buildReminderRingtonePickerIntent())
+                        },
+                        onChooseFile = {
+                            toneAudioPickSlot = ToneAudioPickSlot.Reminder
+                            pickToneAudioLauncher.launch(arrayOf("audio/*"))
+                        },
+                        onClearCustom = { viewModel.clearReminderCustomToneToDefault() },
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    NotificationToneSlot(
+                        title = stringResource(R.string.alert_sound_pomodoro_title),
+                        toneKind = pomodoroToneKind,
+                        customUri = pomodoroCustomToneUri,
+                        onToneKind = { viewModel.setPomodoroToneKind(it) },
+                        onBrowseSystem = {
+                            ringtonePickerSlot = RingtonePickerSlot.Pomodoro
+                            ringtonePickerLauncher.launch(viewModel.buildPomodoroRingtonePickerIntent())
+                        },
+                        onChooseFile = {
+                            toneAudioPickSlot = ToneAudioPickSlot.Pomodoro
+                            pickToneAudioLauncher.launch(arrayOf("audio/*"))
+                        },
+                        onClearCustom = { viewModel.clearPomodoroCustomToneToDefault() },
+                    )
                 }
             }
         }
@@ -1405,23 +1528,117 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 @Composable
 private fun SettingsSection(
     title: String,
+    initiallyExpanded: Boolean = false,
     content: @Composable () -> Unit,
 ) {
+    var expanded by rememberSaveable(title) { mutableStateOf(initiallyExpanded) }
     Column(Modifier.padding(horizontal = horizontalPad)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.SemiBold,
+                ),
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                imageVector = Icons.Default.ExpandMore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.rotate(if (expanded) 180f else 0f),
+            )
+        }
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn(tween(200)) + expandVertically(tween(200)),
+            exit = fadeOut(tween(160)) + shrinkVertically(tween(160)),
+        ) {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(0.dp),
+            ) {
+                content()
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun NotificationToneSlot(
+    title: String,
+    toneKind: AlertToneKind,
+    customUri: String,
+    onToneKind: (AlertToneKind) -> Unit,
+    onBrowseSystem: () -> Unit,
+    onChooseFile: () -> Unit,
+    onClearCustom: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             title,
-            style = MaterialTheme.typography.titleSmall.copy(
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.SemiBold,
-            ),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurface,
         )
-        Spacer(Modifier.height(6.dp))
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(0.dp),
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            content()
+            val chipKinds = listOf(
+                AlertToneKind.DEFAULT_NOTIFICATION,
+                AlertToneKind.ALARM,
+                AlertToneKind.SILENT,
+                AlertToneKind.VIBRATE_ONLY,
+            )
+            chipKinds.forEach { kind ->
+                val label = when (kind) {
+                    AlertToneKind.DEFAULT_NOTIFICATION -> stringResource(R.string.alert_sound_default)
+                    AlertToneKind.ALARM -> stringResource(R.string.alert_sound_alarm)
+                    AlertToneKind.SILENT -> stringResource(R.string.alert_sound_silent)
+                    AlertToneKind.VIBRATE_ONLY -> stringResource(R.string.alert_sound_vibrate)
+                    AlertToneKind.CUSTOM -> stringResource(R.string.alert_sound_custom)
+                }
+                FilterChip(
+                    selected = toneKind == kind,
+                    onClick = { onToneKind(kind) },
+                    label = { Text(label) },
+                )
+            }
+            FilterChip(
+                selected = toneKind == AlertToneKind.CUSTOM,
+                onClick = onBrowseSystem,
+                label = { Text(stringResource(R.string.alert_sound_custom)) },
+            )
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = onBrowseSystem) {
+                Text(stringResource(R.string.tone_browse_system))
+            }
+            TextButton(onClick = onChooseFile) {
+                Text(stringResource(R.string.tone_choose_file))
+            }
+        }
+        if (toneKind == AlertToneKind.CUSTOM && customUri.isNotBlank()) {
+            val display = runCatching { Uri.parse(customUri).lastPathSegment }.getOrNull() ?: customUri
+            Text(
+                display,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            TextButton(onClick = onClearCustom) {
+                Text(stringResource(R.string.tone_clear_custom))
+            }
         }
     }
 }

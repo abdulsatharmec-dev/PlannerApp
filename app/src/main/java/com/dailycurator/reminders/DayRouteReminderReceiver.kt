@@ -8,10 +8,11 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.dailycurator.MainActivity
+import com.dailycurator.di.NotificationChannelsEntryPoint
 import com.dailycurator.data.pomodoro.PomodoroLaunchRequest
 import com.dailycurator.data.repository.TaskRepository
 import com.dailycurator.pomodoro.PomodoroTimerController
-import com.dailycurator.pomodoro.ReminderNotificationIds
+import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,10 +35,16 @@ class DayRouteReminderReceiver : BroadcastReceiver() {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scope.launch {
             try {
+                val entry = EntryPointAccessors.fromApplication(
+                    context.applicationContext,
+                    NotificationChannelsEntryPoint::class.java,
+                )
+                entry.appNotificationChannels().ensureAll()
+                val reminderChannelId = entry.appPreferences().reminderNotificationChannelId()
                 when (action) {
                     ReminderIntents.ACTION_TASK_ALARM -> {
                         val id = intent.getLongExtra(ReminderIntents.EXTRA_TASK_ID, -1L)
-                        if (id > 0) showTaskNotification(context, id)
+                        if (id > 0) showTaskNotification(context, id, reminderChannelId)
                     }
                     ReminderIntents.ACTION_TASK_DONE -> {
                         val id = intent.getLongExtra(ReminderIntents.EXTRA_TASK_ID, -1L)
@@ -76,7 +83,7 @@ class DayRouteReminderReceiver : BroadcastReceiver() {
                             NotificationManagerCompat.from(context).cancel(taskNotifId(id))
                         }
                     }
-                    ReminderIntents.ACTION_HABIT_ALARM -> showHabitNotification(context)
+                    ReminderIntents.ACTION_HABIT_ALARM -> showHabitNotification(context, reminderChannelId)
                     ReminderIntents.ACTION_HABIT_OPEN -> {
                         context.startActivity(
                             Intent(context, MainActivity::class.java).apply {
@@ -96,7 +103,7 @@ class DayRouteReminderReceiver : BroadcastReceiver() {
         }
     }
 
-    private suspend fun showTaskNotification(context: Context, taskId: Long) {
+    private suspend fun showTaskNotification(context: Context, taskId: Long, channelId: String) {
         val task = taskRepo.getById(taskId) ?: return
         if (task.isDone) return
 
@@ -125,24 +132,26 @@ class DayRouteReminderReceiver : BroadcastReceiver() {
         val pomoPi = actionPi(ReminderIntents.ACTION_TASK_POMODORO, notifId + 2)
         val dismissPi = actionPi(ReminderIntents.ACTION_TASK_DISMISS, notifId + 3)
 
-        val notif = NotificationCompat.Builder(context, ReminderNotificationIds.CHANNEL_ID)
+        val taskB = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setContentTitle("Task starting: ${task.title}")
             .setContentText("${task.startTime} – ${task.endTime} · Open for options")
             .setContentIntent(openSheet)
             .setAutoCancel(true)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .addAction(0, "Mark done", donePi)
             .addAction(0, "Pomodoro", pomoPi)
             .addAction(0, "Dismiss", dismissPi)
-            .build()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            taskB.setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
+        }
+        val notif = taskB.build()
 
         nm.notify(notifId, notif)
     }
 
-    private fun showHabitNotification(context: Context) {
+    private fun showHabitNotification(context: Context, channelId: String) {
         val nm = NotificationManagerCompat.from(context)
         val openPi = PendingIntent.getBroadcast(
             context,
@@ -160,18 +169,20 @@ class DayRouteReminderReceiver : BroadcastReceiver() {
             },
             pendingFlags(),
         )
-        val notif = NotificationCompat.Builder(context, ReminderNotificationIds.CHANNEL_ID)
+        val habitB = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setContentTitle("Habits check-in")
             .setContentText("Review or log today’s habits")
             .setContentIntent(openPi)
             .setAutoCancel(true)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .addAction(0, "Open habits", openPi)
             .addAction(0, "Dismiss", dismissPi)
-            .build()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            habitB.setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
+        }
+        val notif = habitB.build()
         nm.notify(ReminderNotificationIds.HABIT_DAILY_ID, notif)
         habitReminderScheduler.scheduleDaily()
     }

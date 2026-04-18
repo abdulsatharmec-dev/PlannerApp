@@ -35,4 +35,18 @@
     <string name="backup_restore_title">Restore from backup?</string>
     <string name="backup_restore_message">This replaces all data on this device with the backup file (database, settings, journal voice clips). The app will close and reopen.</string>
     <string name="backup_restore_confirm">Restore</string>
+    <string name="alert_sound_section_title">Reminder and timer sounds</string>
+    <string name="alert_sound_hint">Each line below has its own notification channel so Android applies sounds reliably. Use system picker or an audio file for a custom tone.</string>
+    <string name="alert_sound_default">Default tone</string>
+    <string name="alert_sound_alarm">Alarm tone</string>
+    <string name="alert_sound_silent">Silent</string>
+    <string name="alert_sound_vibrate">Vibrate only</string>
+    <string name="alert_sound_custom">Custom</string>
+    <string name="alert_sound_reminders_title">Task and habit reminders</string>
+    <string name="alert_sound_pomodoro_title">Pomodoro finished</string>
+    <string name="tone_browse_system">Browse system sounds</string>
+    <string name="tone_choose_file">Choose audio file</string>
+    <string name="tone_clear_custom">Use preset above</string>
+    <string name="tone_picker_reminder_title">Reminder notification sound</string>
+    <string name="tone_picker_pomodoro_title">Pomodoro finished sound</string>
 </resources>

@@ -5,7 +5,6 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import com.dailycurator.pomodoro.ReminderNotificationIds
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.ZoneId
 import java.time.ZonedDateTime

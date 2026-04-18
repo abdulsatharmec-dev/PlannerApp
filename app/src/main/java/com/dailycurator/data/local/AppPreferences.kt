@@ -6,6 +6,8 @@ import com.dailycurator.data.ai.AiPromptDefaults
 import com.dailycurator.data.gmail.GmailLinkedAccountPref
 import com.dailycurator.data.media.MorningPlaylistPref
 import com.dailycurator.data.media.MorningVideoBucket
+import com.dailycurator.notifications.AlertToneKind
+import com.dailycurator.notifications.NotificationTonePack
 import com.dailycurator.ui.theme.AppBackgroundOption
 import com.dailycurator.ui.theme.AppThemePalette
 import com.google.gson.Gson
@@ -75,6 +77,12 @@ private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
 private const val KEY_APP_LOCK_PIN_SALT = "app_lock_pin_salt"
 private const val KEY_APP_LOCK_PIN_HASH = "app_lock_pin_hash"
 private const val KEY_APP_LOCK_ALLOW_BIOMETRIC = "app_lock_allow_biometric"
+private const val KEY_REMINDER_TONE_KIND = "reminder_tone_kind_v1"
+private const val KEY_REMINDER_TONE_CUSTOM_URI = "reminder_tone_custom_uri_v1"
+private const val KEY_POMO_TONE_KIND = "pomo_tone_kind_v1"
+private const val KEY_POMO_TONE_CUSTOM_URI = "pomo_tone_custom_uri_v1"
+private const val KEY_NOTIFICATION_TONE_PACK_ID = "notification_tone_pack_id_v1"
+private const val KEY_LEGACY_ALERT_SOUND_PRESET = "alert_sound_preset_v1"
 
 /** Minutes from midnight; inclusive schedule / “day” window on the home screen. */
 data class DayWindowMinutes(val startMinute: Int, val endMinute: Int)
@@ -1049,6 +1057,119 @@ class AppPreferences @Inject constructor(
     fun setAppLockBiometricAllowed(allowed: Boolean) {
         prefs.edit().putBoolean(KEY_APP_LOCK_ALLOW_BIOMETRIC, allowed).apply()
     }
+
+    val reminderToneKindFlow: Flow<AlertToneKind> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_REMINDER_TONE_KIND || key == KEY_REMINDER_TONE_CUSTOM_URI) {
+                trySend(getReminderToneKind())
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getReminderToneKind())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val reminderCustomToneUriFlow: Flow<String> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_REMINDER_TONE_CUSTOM_URI) trySend(getReminderCustomToneUriString())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getReminderCustomToneUriString())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val pomodoroToneKindFlow: Flow<AlertToneKind> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_POMO_TONE_KIND || key == KEY_POMO_TONE_CUSTOM_URI) {
+                trySend(getPomodoroToneKind())
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getPomodoroToneKind())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    val pomodoroCustomToneUriFlow: Flow<String> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_POMO_TONE_CUSTOM_URI) trySend(getPomodoroCustomToneUriString())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getPomodoroCustomToneUriString())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    fun migrateLegacyAlertSoundIfNeeded() {
+        if (prefs.contains(KEY_REMINDER_TONE_KIND)) return
+        val legacy = prefs.getString(KEY_LEGACY_ALERT_SOUND_PRESET, null)
+        val mapped = when (legacy) {
+            "default" -> AlertToneKind.DEFAULT_NOTIFICATION
+            "alarm" -> AlertToneKind.ALARM
+            "silent" -> AlertToneKind.SILENT
+            "vibrate" -> AlertToneKind.VIBRATE_ONLY
+            else -> AlertToneKind.DEFAULT_NOTIFICATION
+        }
+        prefs.edit()
+            .putString(KEY_REMINDER_TONE_KIND, mapped.storageId)
+            .putString(KEY_POMO_TONE_KIND, mapped.storageId)
+            .remove(KEY_LEGACY_ALERT_SOUND_PRESET)
+            .apply()
+    }
+
+    fun getReminderToneKind(): AlertToneKind =
+        AlertToneKind.fromStorageId(prefs.getString(KEY_REMINDER_TONE_KIND, null))
+
+    fun setReminderToneKind(kind: AlertToneKind) {
+        val ed = prefs.edit().putString(KEY_REMINDER_TONE_KIND, kind.storageId)
+        if (kind != AlertToneKind.CUSTOM) {
+            ed.remove(KEY_REMINDER_TONE_CUSTOM_URI)
+        }
+        ed.apply()
+    }
+
+    fun getReminderCustomToneUriString(): String =
+        prefs.getString(KEY_REMINDER_TONE_CUSTOM_URI, "") ?: ""
+
+    fun setReminderCustomToneUriString(uri: String) {
+        prefs.edit().putString(KEY_REMINDER_TONE_CUSTOM_URI, uri.trim()).apply()
+    }
+
+    fun getPomodoroToneKind(): AlertToneKind =
+        AlertToneKind.fromStorageId(prefs.getString(KEY_POMO_TONE_KIND, null))
+
+    fun setPomodoroToneKind(kind: AlertToneKind) {
+        val ed = prefs.edit().putString(KEY_POMO_TONE_KIND, kind.storageId)
+        if (kind != AlertToneKind.CUSTOM) {
+            ed.remove(KEY_POMO_TONE_CUSTOM_URI)
+        }
+        ed.apply()
+    }
+
+    fun getPomodoroCustomToneUriString(): String =
+        prefs.getString(KEY_POMO_TONE_CUSTOM_URI, "") ?: ""
+
+    fun setPomodoroCustomToneUriString(uri: String) {
+        prefs.edit().putString(KEY_POMO_TONE_CUSTOM_URI, uri.trim()).apply()
+    }
+
+    fun getStoredNotificationTonePackId(): String =
+        prefs.getString(KEY_NOTIFICATION_TONE_PACK_ID, "") ?: ""
+
+    fun setStoredNotificationTonePackId(packId: String) {
+        prefs.edit().putString(KEY_NOTIFICATION_TONE_PACK_ID, packId).apply()
+    }
+
+    fun currentNotificationTonePackId(): String = NotificationTonePack.packId(
+        getReminderToneKind(),
+        getReminderCustomToneUriString(),
+        getPomodoroToneKind(),
+        getPomodoroCustomToneUriString(),
+    )
+
+    fun reminderNotificationChannelId(): String =
+        "dayroute_rem_${currentNotificationTonePackId()}"
+
+    fun pomodoroCompleteNotificationChannelId(): String =
+        "dayroute_pom_${currentNotificationTonePackId()}"
 
     fun getHomeDailyPdfUri(): String = prefs.getString(KEY_HOME_DAILY_PDF_URI, "") ?: ""
 
